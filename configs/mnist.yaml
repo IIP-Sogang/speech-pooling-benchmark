@@ -1,0 +1,39 @@
+# 1. DataLoader
+dataloader: dataloader_mnist
+batch_size: 64
+num_workers: 8
+
+
+# 2. Model
+model: linear_mnist
+
+# 2. Optimizer
+optimizer: adam
+optimizer_config:
+  lr: 0.001
+  weight_decay: 0
+
+# 2. LossFunction
+loss: clip_ce
+
+# 2. Scheduler
+scheduler: steplr
+scheduler_config:
+  step_size: 30
+  gamma: 0.95
+
+
+# trainer
+default_root_dir: ./results/mnist
+profiler: advanced
+max_epoch: 200
+devices: 1
+accelerator: gpu
+num_sanity_val_steps: -1
+
+
+# save, load
+resume_checkpoint: ./results/mnist/lightning_logs/version_0/checkpoints/sample-mnist-epoch=05-val_loss=0.35-val_ACC=87.72.ckpt
+
+# random seed
+random_seed: 2301235
