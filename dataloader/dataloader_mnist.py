@@ -5,7 +5,7 @@ from torchvision import datasets
 from torchvision.transforms import ToTensor
 
 
-training_data = datasets.FashionMNIST(
+training_dataset = datasets.FashionMNIST(
     root="data",
     train=True,
     download=True,
@@ -13,7 +13,7 @@ training_data = datasets.FashionMNIST(
 )
 
 
-test_data = datasets.FashionMNIST(
+test_dataset = datasets.FashionMNIST(
     root="data",
     train=False,
     download=True,

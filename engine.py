@@ -3,7 +3,6 @@ import torch
 
 
 
-
 class FeatureExtractor(pl.LightningModule):
     def __init__(self, model, loss_function, optimizer, scheduler):
         super().__init__()
