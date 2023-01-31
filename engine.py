@@ -39,7 +39,7 @@ class SpeechModel(pl.LightningModule):
         loss = self.loss_function(y_hat, y)
 
         # Logging to TensorBoard
-        self.log("loss", loss, on_epoch= True, prog_bar=True, logger=True)
+        self.log("loss", loss, on_epoch= True, prog_bar=True, logger=True, sync_dist=True)
 
         return loss
 
@@ -48,7 +48,7 @@ class SpeechModel(pl.LightningModule):
         x, y = batch
         y_hat = self.model(x)
         loss = self.loss_function(y_hat, y)
-        self.log("test_loss", loss,  on_epoch= True, prog_bar=True, logger=True)
+        self.log("test_loss", loss,  on_epoch= True, prog_bar=True, logger=True, sync_dist=True)
 
         correct = (y_hat.argmax(1) == y).type(torch.float).sum().item()
         size = x.shape[0]
@@ -66,15 +66,13 @@ class SpeechModel(pl.LightningModule):
         x, y = batch
         y_hat = self.model(x)
         loss = self.loss_function(y_hat, y)
-        self.log("val_loss", loss,  on_epoch= True, prog_bar=True, logger=True)
+        self.log("val_loss", loss,  on_epoch= True, prog_bar=True, logger=True, sync_dist=True)
 
         correct = (y_hat.argmax(1) == y).type(torch.float).sum().item()
         size = x.shape[0]
         return {'correct': correct, 'size': size}
 
     def validation_epoch_end(self, validation_step_outputs):
-        # import pdb
-        # pdb.set_trace()
         correct_score = sum([dic['correct'] for dic in validation_step_outputs])
         total_size = sum([dic['size'] for dic in validation_step_outputs])
         acc = correct_score/total_size
@@ -91,6 +89,8 @@ class SpeechModel(pl.LightningModule):
             "lr_scheduler": {
                 "scheduler": self.scheduler,
                 "monitor": "val_loss",
-                "frequency": 1
+                "interval": self.scheduler.interval,
+                "frequency": self.scheduler.frequency,
+                "name": 'lr_log'
             },
         }
