@@ -1,10 +1,12 @@
 import glob
+from typing import List, Optional, Tuple, Callable
 
 import torch
 import torch.nn as nn
+from torch import Tensor
 from torch.utils.data import DataLoader
 
-from dataset import SpeechCommandDataset, DATA_LIST
+from .dataset import SpeechCommandDataset
 
 
 def generate_librispeech_metadata(data_dir):
@@ -21,13 +23,25 @@ def generate_librispeech_metadata(data_dir):
  
     ### NOTE (JK) 구현중..
 
-
-def load_dataloader(data_name:str='speechcommands', data_dir:str='data', subset='training'):
+def load_dataset(data_name:str='speechcommands', **kwargs)->Tuple[torch.utils.data.Dataset, Optional[Callable]]:
     if data_name == 'speechcommands':
-        dataset= SpeechCommandDataset(subset=subset)
+        for key in ['root', 'subset']:
+            assert key in kwargs, f"Pass '{key}' through the config yaml file!!"
+        return SpeechCommandDataset(**kwargs), pad_collate
+    else:
+        assert False, f"DATA '{data_name}' IS NOT IMPLEMENTD!"
 
-    return torch.utils.data.DataLoader(dataset)
+def pad_collate(batch:List[Tuple[Tensor, int]]):
+    batch_size = len(batch)
+    max_array_length = 0
 
-def load_dataset(data_name:str='speechcommands', data_dir:str='data', subset='training'):
-    if data_name == 'speechcommands':
-        return SpeechCommandDataset(subset=subset)
+    for array, _ in batch:
+        if len(array)>max_array_length: max_array_length = len(array)
+
+    data = torch.zeros((batch_size, max_array_length, batch[0][0].size(-1)))
+    labels = torch.zeros((batch_size, ), dtype=torch.long)
+    for i, (array, label) in enumerate(batch):
+        data[i, :len(array)] = array
+        labels[i] = label
+
+    return data, labels
