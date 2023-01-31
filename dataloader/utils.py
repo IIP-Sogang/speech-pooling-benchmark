@@ -23,11 +23,15 @@ def generate_librispeech_metadata(data_dir):
  
     ### NOTE (JK) 구현중..
 
-def load_dataset(data_name:str='speechcommands', **kwargs)->Tuple[torch.utils.data.Dataset, Optional[Callable]]:
+def load_dataset(data_name:str='speechcommands', get_collate_fn:bool=False, **kwargs)->Tuple[torch.utils.data.Dataset, Optional[Callable]]:
     if data_name == 'speechcommands':
         for key in ['root', 'subset']:
             assert key in kwargs, f"Pass '{key}' through the config yaml file!!"
-        return SpeechCommandDataset(**kwargs), pad_collate
+        dataset = SpeechCommandDataset(**kwargs)
+        if get_collate_fn:
+            return dataset, pad_collate
+        else:
+            return dataset
     else:
         assert False, f"DATA '{data_name}' IS NOT IMPLEMENTD!"
 
