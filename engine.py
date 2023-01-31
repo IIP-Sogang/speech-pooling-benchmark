@@ -2,9 +2,8 @@ import pytorch_lightning as pl
 import torch
 
 
-
-class FeatureExtractor(pl.LightningModule):
-    def __init__(self, model, loss_function, optimizer, scheduler):
+class SpeechModel(pl.LightningModule):
+    def __init__(self, model, loss_function, optimizer, scheduler, **kwargs):
         super().__init__()
         # ⚡ model
         self.model = model
@@ -23,13 +22,14 @@ class FeatureExtractor(pl.LightningModule):
         self.save_hyperparameters(ignore=['model'])
 
         #⚡⚡⚡ debugging - print input output layer ⚡⚡⚡
-        self.example_input_array = torch.Tensor(64, 1, 28, 28)
+        sample_size = tuple(map(int, kwargs['sample_input_size'].split())) if kwargs.get('sample_input_size', False) else (64,1,28,28)
+        self.example_input_array = torch.randn(sample_size)
 
 
     def training_step(self, batch, batch_idx):
         x, y = batch
         # preprocess
-
+        
         # inference
         y_hat = self.model(x)
 
@@ -39,7 +39,7 @@ class FeatureExtractor(pl.LightningModule):
         loss = self.loss_function(y_hat, y)
 
         # Logging to TensorBoard
-        self.log("loss", loss, on_epoch= True, prog_bar=True, logger=True)        
+        self.log("loss", loss, on_epoch= True, prog_bar=True, logger=True)
 
         return loss
 
@@ -61,9 +61,6 @@ class FeatureExtractor(pl.LightningModule):
 
         self.log("test_ACC", acc * 100, on_epoch = True, prog_bar=True, sync_dist=True)
 
-
-    
-
     def validation_step(self, batch, batch_idx):
         # this is the validation loop
         x, y = batch
@@ -84,13 +81,9 @@ class FeatureExtractor(pl.LightningModule):
 
         self.log("val_ACC", acc * 100, on_epoch = True, prog_bar=True, sync_dist=True)
 
-    
-
-
     def forward(self, x):
         y_hat = x
         return y_hat
-
 
     def configure_optimizers(self):
         return {
