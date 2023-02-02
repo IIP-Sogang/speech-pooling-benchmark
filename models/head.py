@@ -4,6 +4,7 @@ from typing import Optional, Tuple, Union
 import torch
 import torch.nn as nn
 from torch import Tensor
+import torch.nn.functional as F
 
 
 class TaskDependentModule(nn.Module, ABC):
@@ -49,6 +50,30 @@ class SimpleAvgPool(nn.Module):
         """
         return self.avgpool(input_feature.permute(0,2,1)).squeeze(-1)
 
+class SelfAttentivePooling(nn.Module):
+    def __init__(self, input_dim:int = 768):
+        super().__init__()
+
+        self.sap_linear = nn.Linear(input_dim, input_dim)
+        self.attention = self.new_parameter(input_dim, 1)
+
+    def new_parameter(self, *size):
+        out = nn.Parameter(torch.FloatTensor(*size))
+        nn.init.xavier_normal_(out)
+        return out
+
+    def forward(self, input_feature:Tensor):
+        """
+        Input feature size should follow (Batch size, Length, Dimension)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        h = torch.tanh(self.sap_linear(input_feature)) # 
+        w = torch.matmul(h, self.attention).squeeze(dim=2)
+        w = F.softmax(w, dim=1).view(input_feature.size(0), input_feature.size(1), 1) # 
+        feature = torch.sum(input_feature * w, dim=1) 
+
+        return feature
+
 
 class SimpleLinear(nn.Module):
     def __init__(self, *args, **kwargs):
@@ -60,8 +85,11 @@ class SimpleLinear(nn.Module):
         return logits
 
 
-def select_head(head_type:str='avgpool'):
+def select_head(head_type:str='avgpool', input_dim:int=768, **kwargs):
     if head_type=='avgpool':
         return SimpleAvgPool()
+    elif head_type=='sap':
+        return SelfAttentivePooling(input_dim)
+
     else:
         assert False, f"""HEAD TYPE "{head_type}" IS NOT IMPLEMENTED!"""
