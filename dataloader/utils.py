@@ -9,20 +9,6 @@ from torch.utils.data import DataLoader
 from .dataset import SpeechCommandDataset
 
 
-def generate_librispeech_metadata(data_dir):
-    transcript_paths = glob.glob(f"{data_dir}/*/*/*.trans.txt")
-    audio_paths = glob.glob(f"{data_dir}/*/*/*.flac")
-
-    transcript_dict = dict()
-
-    for trans_path in transcript_paths:
-        with open(trans_path) as f:
-            for line in f:
-                filename, transcript = f.strip().split()
-                transcript_dict[filename] = transcript
- 
-    ### NOTE (JK) 구현중..
-
 def load_dataset(data_name:str='speechcommands', get_collate_fn:bool=False, **kwargs)->Tuple[torch.utils.data.Dataset, Optional[Callable]]:
     if data_name == 'speechcommands':
         for key in ['root', 'subset']:
@@ -37,15 +23,24 @@ def load_dataset(data_name:str='speechcommands', get_collate_fn:bool=False, **kw
 
 def pad_collate(batch:List[Tuple[Tensor, int]]):
     batch_size = len(batch)
+    batch_sample = batch[0][0]
+    batch_dim = len(batch_sample.shape)
+    
     max_array_length = 0
 
+    search_dim = 0 if batch_dim == 2 else 1
     for array, _ in batch:
-        if len(array)>max_array_length: max_array_length = len(array)
+        if array.size(search_dim)>max_array_length: max_array_length = array.size(search_dim)
 
-    data = torch.zeros((batch_size, max_array_length, batch[0][0].size(-1)))
+    data = torch.zeros((batch_size, max_array_length, batch_sample.size(-1))) if batch_dim == 2 \
+           else torch.zeros((batch_size, batch_sample.size(0), max_array_length, batch_sample.size(-1)))
     labels = torch.zeros((batch_size, ), dtype=torch.long)
+    
     for i, (array, label) in enumerate(batch):
-        data[i, :len(array)] = array
+        if batch_dim == 2:
+            data[i, :len(array)] = array
+        else:
+            data[i, :, :array.size(1)] = array
         labels[i] = label
 
     return data, labels

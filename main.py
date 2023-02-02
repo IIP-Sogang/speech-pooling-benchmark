@@ -66,6 +66,14 @@ def train(config):
     lr_callback = LearningRateMonitor()
 
 
+    # ⚡⚡ Logger
+    from lightning_utilities.core.imports import RequirementCache
+    _TENSORBOARD_AVAILABLE = RequirementCache("tensorboard")
+    _TENSORBOARDX_AVAILABLE = RequirementCache("tensorboardX")
+    if not (_TENSORBOARD_AVAILABLE or _TENSORBOARDX_AVAILABLE):
+        print("Warning : Tensorboard is not available, CSV logger will be used.")
+
+
     # ⚡⚡ 5. LightningModule
     trainer = pl.Trainer(
         deterministic=True, # Might make your system slower, but ensures reproducibility.
