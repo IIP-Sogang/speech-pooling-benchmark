@@ -20,8 +20,10 @@ class Wav2VecExtractor(Extractor):
         self.normalizer = processor.feature_extractor
         self.model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base")    
 
-    def extract(self, inputs:Tuple[List[float], Union[int, List[int]]]):
-        inputs = self.normalizer(inputs[0], sampling_rate=inputs[1], return_tensors='pt')
+    def extract(self, inputs:torch.Tensor, sr:int=16000):
+        device = inputs.device
+        inputs = self.normalizer(inputs, sampling_rate=sr, return_tensors='pt')
+        inputs['input_values'] = inputs['input_values'].to(device)
         outputs = self.model(inputs['input_values'][0], return_dict=True, output_hidden_states=True)
         return outputs.hidden_states
 

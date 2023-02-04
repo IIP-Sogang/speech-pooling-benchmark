@@ -8,18 +8,17 @@ import torch.nn as nn
 import torchaudio
 from torch import Tensor
 
+from dataloader.voxceleb1 import VoxCeleb1Identification, VoxCeleb1Verification
+
 HASH_DIVIDER = "_nohash_"
 EXCEPT_FOLDER = "_background_noise_"
 DATA_LIST = [
     "speechcommands",
-    "librispeech",
+    "voxceleb",
 ]
 
-class LibreSpeechDataset(nn.Module):
-    def __init__(self, meta_path:str):
-        with open(meta_path) as f: f.readlines()
 
-
+# Keyword Spotting
 class SpeechCommandDataset(torchaudio.datasets.SPEECHCOMMANDS):
     CLASS_LIST = [
         'backward', 'bed', 'bird', 'cat', 'dog', 'down', 
@@ -53,14 +52,14 @@ class SpeechCommandDataset(torchaudio.datasets.SPEECHCOMMANDS):
             walker = sorted(str(p) for p in Path(self._path).glob(f"*/*.{self.ext}"))
             self._walker = [w for w in walker if HASH_DIVIDER in w and EXCEPT_FOLDER not in w]
         
-    def __getitem__(self, n: int) -> Union[Tuple[Tensor, int, str, str, int], Tuple[Tensor, int]]:
+    def __getitem__(self, n: int) -> Tuple[Tensor, int]:
         if self.ext == 'pt':
             pt_path = self.get_metadata(n)
             label:str = os.path.basename(os.path.dirname(pt_path))
             label:int = self.label2index(label)
             return (torch.load(pt_path, map_location='cpu'), label)
         else:
-            return super().__getitem__(n)
+            return super().__getitem__(n)[:2] #Tuple[Tensor, int, str, str, int]
 
     def get_metadata(self, index):
         return self._walker[index]
@@ -80,6 +79,88 @@ class SpeechCommandDataset(torchaudio.datasets.SPEECHCOMMANDS):
 
         return new_path
 
+# Speaker Verification
+def map_subset_voxceleb(subset:str):
+    if subset=='training':
+        return 'train'
+    elif subset=='validation':
+        return 'dev'
+    elif subset=='testing':
+        return 'test'
+    else:
+        raise Exception
+
+
+class VoxCelebDataset(VoxCeleb1Identification):
+    def __init__(self, root:str='data', subset:str='training', url:str='iden_split.txt', ext:str='wav', download=False):
+        assert subset in ['training','validation','testing']
+        assert os.path.exists(root)
+        subset = map_subset_voxceleb(subset)
+        super().__init__(root=root, subset=subset, meta_url=url, download=download)
+        self._ext_audio = '.'+ext
+        self.root = root
+
+    def generate_feature_path(self, index, new_root:str='data/VoxCeleb1', tag:str='_feat'):
+        old_path, _, _, _ = self.get_metadata(index)
+        # new_path = old_path.replace(self.root, new_root+tag).replace('.wav','.pt')
+        new_path = (new_root+tag+'/'+old_path).replace('.wav','.pt')
+        
+        if not os.path.exists(os.path.dirname(new_path)):
+            os.makedirs(os.path.dirname(new_path))
+
+        return new_path
+
+    def __getitem__(self, n: int) -> Tuple[Tensor, int]:
+        return super().__getitem__(n)[:2]
+
+
+class VoxCelebVerificationDataset(VoxCeleb1Verification):
+    def __init__(self, root:str='data', subset:str='training', ext:str='wav', download=False):
+        assert subset in ['training','validation','testing']
+        assert os.path.exists(root)
+        
+        super().__init__(root=root, meta_url='', download=download)
+        self._ext_audio = '.'+ext
+        self.root = root
+        
+    def __getitem__(self, n: int) -> Tuple[Tensor, Tensor, int, int, str, str]:
+        """Load the n-th sample from the dataset.
+
+        Args:
+            n (int): The index of the sample to be loaded.
+
+        Returns:
+            Tuple of the following items;
+
+            Tensor:
+                Waveform of speaker 1
+            Tensor:
+                Waveform of speaker 2
+            int:
+                Sample rate
+            int:
+                Label
+            str:
+                File ID of speaker 1
+            str:
+                File ID of speaker 2
+        """
+        if self._ext_audio == '.pt':
+            metadata = self.get_metadata(n)
+            waveform_spk1 = torch.load(self._path, metadata[0], metadata[2])
+            waveform_spk2 = torch.load(self._path, metadata[1], metadata[2])
+            return (waveform_spk1, waveform_spk2) + metadata[2:]
+        elif self._ext_audio == '.wav':
+            return self.__getitem__(n)
+
+    def generate_feature_path(self, index, new_root:str='data/VoxCeleb1', tag:str='_feat'):
+        old_path = self.get_metadata(index)
+        new_path = old_path.replace(self.root, new_root+tag).replace('.wav','.pt')
+        
+        if not os.path.exists(os.path.dirname(new_path)):
+            os.makedirs(os.path.dirname(new_path))
+
+        return new_path
 
 
 def _load_list(root, *filenames):
