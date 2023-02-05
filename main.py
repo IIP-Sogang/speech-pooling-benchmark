@@ -43,7 +43,7 @@ def train(config):
         )
 
     # ⚡⚡ 2. Set 'Model', 'Loss', 'Optimizer', 'Scheduler'
-    model = importlib.import_module('models.head').__getattribute__(config['model'])
+    model = importlib.import_module('models.tasks').__getattribute__(config['model'])
     model =  model(**config['model_config'])
 
     optimizer = importlib.import_module("optimizer." + config['optimizer']).__getattribute__("Optimizer")

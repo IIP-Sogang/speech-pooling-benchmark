@@ -7,48 +7,23 @@ from torch import Tensor
 import torch.nn.functional as F
 
 
-class TaskDependentModule(nn.Module, ABC):
-    def __init__(self) -> None:
-        super().__init__()
-        pass
-
-    @abstractmethod
-    def forward(self, inputs) -> Tensor:
-        pass
-
-    @abstractmethod
-    def predict(self, inputs) -> Union[int, Tensor]:
-        pass
-
-
-class KeywordSpottingModule(TaskDependentModule):
-    def __init__(self, input_dim:int = 768, num_classes:int = 30, head_type='avgpool', **kwargs) -> None:
-        super().__init__()
-        self.head = select_head(head_type, **kwargs)
-        self.linear = SimpleLinear(input_dim, num_classes)
-
-    def forward(self, inputs) -> Tensor:
-        speech_representation = self.head(inputs)
-        outputs = self.linear(speech_representation)
-        return outputs
-
-    def predict(self, inputs) -> Union[int, Tensor]:
-        speech_representation = self.head(inputs)
-        outputs = self.linear(speech_representation)
-        return outputs.max(-1)
-
-
 class SimpleAvgPool(nn.Module):
     def __init__(self):
         super().__init__()
-        self.avgpool = nn.AdaptiveAvgPool1d(1)
+        # self.avgpool = nn.AdaptiveAvgPool1d(1)
 
     def forward(self, input_feature:Tensor):
         """
-        Input feature size should follow (Batch size, Length, Dimension)
+        Input feature size should follow (Batch size, Length, Dimension) or (Batch size, n_layers, Length, Dimension)
         Return speech representation which follows (Batch size, Dimension)
         """
-        return self.avgpool(input_feature.permute(0,2,1)).squeeze(-1)
+        if input_feature.dim() == 3:
+            # return self.avgpool(input_feature.permute(0,2,1)).squeeze(-1)
+            return input_feature.mean(1)
+        elif input_feature.dim() == 4:
+            return input_feature.mean(2)
+        else:
+            raise Exception
 
 class SelfAttentivePooling(nn.Module):
     def __init__(self, input_dim:int = 768):
@@ -76,20 +51,22 @@ class SelfAttentivePooling(nn.Module):
 
 
 class WhiteningBERT(nn.Module):
-    def __init__(self, layer_ids:Union[str, int, List[int]]=None):
+    def __init__(self, layer_ids:Union[str, int, List[int]]=None, whitening=True):
         super().__init__()
+        print("layers", layer_ids)
+        print("whitening", whitening)
         self.pool = SimpleAvgPool()
         self.layer_comb = LayerCombination(layer_ids=layer_ids)
-        self.whitening = Whitening()
+        self.whitening = Whitening() if whitening else nn.Identity()
 
     def forward(self, input_feature:Tensor):
         """
         Input feature size should follow (Batch size, n_layers, Length, Dimension)
         Return speech representation which follows (Batch size, Dimension)
         """
-        combined_feature = self.layer_comb(input_feature)
-        pool_feature = self.pool(combined_feature)
-        whiten_feature = self.whitening(pool_feature)
+        pool_feature = self.pool(input_feature)
+        combined_feature = self.layer_comb(pool_feature)
+        whiten_feature = self.whitening(combined_feature)
         return whiten_feature
 
 
@@ -124,33 +101,25 @@ class Whitening(nn.Module):
         Input feature size should follow (Batch size, Length, Dimension)
         Return speech representation which follows (Batch size, Dimension)
         """
-        m = input_feature.mean(dim=0)
-        Cov = (input_feature-m).T @ (input_feature-m)
-        svd = torch.svd(Cov)
-        U = svd.U
-        S = svd.S
-        D = torch.diag(S ** -0.5)
-        whiten_feature = (input_feature - m) @ U @ D
+        import pdb; pdb.set_trace()
+        m = input_feature.mean(dim=0, keepdim=True)
+        Cov = torch.mm((input_feature-m).T,(input_feature-m))
+        # eigval, eigvec = torch.linalg.eig(Cov)
+        # D = torch.diag(eigval ** -0.5)
+        # whiten_feature = (input_feature - m) @ eigvec @ D
+        U, S, V = torch.svd(Cov)
+        D = torch.diag(1/torch.sqrt(S))
+        whiten_feature = torch.mm(input_feature - m, torch.mm(U,D))
         return whiten_feature
 
 
-class SimpleLinear(nn.Module):
-    def __init__(self, *args, **kwargs):
-        super().__init__()
-        self.linear = nn.Linear(*args, **kwargs)
-
-    def forward(self, represents:Tensor):
-        logits = self.linear(represents)
-        return logits
-
-
 def select_head(head_type:str='avgpool', 
-                input_dim:int=768, layer_ids:Union[str,List[int],int]="1 12", **kwargs):
+                input_dim:int=768, layer_ids:Union[str,List[int],int]="1 12", whitening:bool=True, **kwargs):
     if head_type=='avgpool':
         return SimpleAvgPool()
     elif head_type=='sap':
         return SelfAttentivePooling(input_dim)
     elif head_type=='white':
-        return WhiteningBERT(layer_ids=layer_ids)
+        return WhiteningBERT(layer_ids=layer_ids, whitening=whitening)
     else:
         assert False, f"""HEAD TYPE "{head_type}" IS NOT IMPLEMENTED!"""
