@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch import Tensor
 import torch.nn.functional as F
 
-from models.head import select_head
+from models.aggregate import select_head
 from models.modules import SimpleLinear
 from models.tasks.absract import TaskDependentModule
 
