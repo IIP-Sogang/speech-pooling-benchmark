@@ -215,11 +215,13 @@ class IEMOCAPDataset(torchaudio.datasets.IEMOCAP):
         sessions: Tuple[str] = (1, 2, 3, 4, 5),
         utterance_type: Optional[str] = None,
         ext:str='wav',
+        feature_path_tag:str='_feat_1_12',
         **kwargs,
     ):
         root = Path(root)
         self._path = root / "IEMOCAP"
         self.ext = ext
+        self.feature_path_tag = feature_path_tag
 
         if not os.path.isdir(self._path):
             raise RuntimeError("Dataset not found.")
@@ -278,7 +280,8 @@ class IEMOCAPDataset(torchaudio.datasets.IEMOCAP):
 
     def __getitem__(self, n: int) -> Tuple[Tensor, int]:
         if self.ext == 'pt':
-            pt_path = self.generate_feature_path(n)
+            new_root = str(self._path)
+            pt_path = self.generate_feature_path(n, new_root = new_root, tag = self.feature_path_tag)
             wav_path, sr, wav_stem, label, speaker = self.get_metadata(n)
 
             return (torch.load(pt_path, map_location='cpu'), label)
