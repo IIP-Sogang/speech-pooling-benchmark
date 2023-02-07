@@ -1,7 +1,8 @@
 import os
+import re
 import glob
 from pathlib import Path
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional
 
 import torch
 import torch.nn as nn
@@ -15,6 +16,7 @@ EXCEPT_FOLDER = "_background_noise_"
 DATA_LIST = [
     "speechcommands",
     "voxceleb",
+    "iemocap"
 ]
 
 
@@ -170,3 +172,108 @@ def _load_list(root, *filenames):
         with open(filepath) as fileobj:
             output += [os.path.normpath(os.path.join(root, line.strip())) for line in fileobj]
     return output
+
+
+
+# Emotion Recognition
+def _get_wavs_paths(data_dir):
+    wav_dir = data_dir / "sentences" / "wav"
+    wav_paths = sorted(str(p) for p in wav_dir.glob("*/*.wav"))
+    relative_paths = []
+    for wav_path in wav_paths:
+        start = wav_path.find("Session")
+        wav_path = wav_path[start:]
+        relative_paths.append(wav_path)
+    return relative_paths
+
+
+class IEMOCAPDataset(torchaudio.datasets.IEMOCAP):
+    def __init__(
+        self,
+        root: Union[str, Path],
+        sessions: Tuple[str] = (1, 2, 3, 4, 5),
+        utterance_type: Optional[str] = None,
+        ext:str='wav',
+        **kwargs,
+    ):
+        root = Path(root)
+        self._path = root / "IEMOCAP"
+        self.ext = ext
+
+        if not os.path.isdir(self._path):
+            raise RuntimeError("Dataset not found.")
+
+        if utterance_type not in ["scripted", "improvised", None]:
+            raise ValueError("utterance_type must be one of ['scripted', 'improvised', or None]")
+
+        all_data = []
+        self.data = []
+        self.mapping = {}
+
+        for session in sessions:
+            session_name = f"Session{session}"
+            print(session_name) ###############
+            session_dir = self._path / session_name
+
+            # get wav paths
+            wav_paths = _get_wavs_paths(session_dir)
+            for wav_path in wav_paths:
+                wav_stem = str(Path(wav_path).stem)
+                all_data.append(wav_stem)
+
+            # add labels
+            label_dir = session_dir / "dialog" / "EmoEvaluation"
+            query = "*.txt"
+            if utterance_type == "scripted":
+                query = "*script*.txt"
+            elif utterance_type == "improvised":
+                query = "*impro*.txt"
+            label_paths = label_dir.glob(query)
+
+            for label_path in label_paths:
+                # ⚡ remove redundant files
+                if '._' in str(label_path):
+                    continue 
+
+                with open(label_path, "r") as f:
+                    for line in f:
+                        if not line.startswith("["):
+                            continue
+                        line = re.split("[\t\n]", line)
+                        wav_stem = line[1] # 'Ses01F_impro01_F000
+                        label = line[2] # 'neu'
+                        if wav_stem not in all_data: 
+                            continue
+                        if label not in ["neu", "hap", "ang", "sad", "exc", "fru"]:
+                            continue
+                        self.mapping[wav_stem] = {}
+                        self.mapping[wav_stem]["label"] = label
+
+            for wav_path in wav_paths:
+                wav_stem = str(Path(wav_path).stem)
+                if wav_stem in self.mapping:
+                    self.data.append(wav_stem)
+                    self.mapping[wav_stem]["path"] = wav_path
+
+    def __getitem__(self, n: int) -> Tuple[Tensor, int]:
+        if self.ext == 'pt':
+            pt_path = self.generate_feature_path(n)
+            wav_path, sr, wav_stem, label, speaker = self.get_metadata(n)
+
+            return (torch.load(pt_path, map_location='cpu'), label)
+        else:
+            return super().__getitem__(n)[:2] #Tuple[Tensor, int, str, str, int]
+        
+
+    def generate_feature_path(self, index, new_root:str='/home/nas4/DB/IEMOCAP/IEMOCAP', tag:str='_feat'):
+        wav_path, _, _, _, _ = self.get_metadata(index)
+        old_path = str(self._path / wav_path)
+        new_path = old_path.replace(str(self._path), new_root+tag).replace('.wav','.pt')
+        
+        if not os.path.exists(os.path.dirname(new_path)):
+            os.makedirs(os.path.dirname(new_path))
+
+        return new_path
+        
+
+
