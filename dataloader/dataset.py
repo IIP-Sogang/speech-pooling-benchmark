@@ -92,13 +92,19 @@ def map_subset_voxceleb(subset:str):
 
 
 class VoxCelebDataset(VoxCeleb1Identification):
-    def __init__(self, root:str='data', subset:str='training', url:str='iden_split.txt', ext:str='wav', download=False):
+    VRF_TEST_SPEAKER_ID = ["id10270", "id10272", "id10274", "id10276", "id10278", "id10280", "id10282", "id10284", "id10286", "id10288", 
+                           "id10290", "id10292", "id10294", "id10296", "id10298", "id10300", "id10302", "id10304", "id10306", "id10308", 
+                           "id10271", "id10273", "id10275", "id10277", "id10279", "id10281", "id10283", "id10285", "id10287", "id10289", 
+                           "id10291", "id10293", "id10295", "id10297", "id10299", "id10301", "id10303", "id10305", "id10307", "id10309"]
+
+    def __init__(self, root:str='data', subset:str='training', url:str='vrfy_split.txt', ext:str='pt', download=False, **kwargs):
         assert subset in ['training','validation','testing']
         assert os.path.exists(root)
         subset = map_subset_voxceleb(subset)
         super().__init__(root=root, subset=subset, meta_url=url, download=download)
         self._ext_audio = '.'+ext
         self.root = root
+        self.id2class = self._map_spk_id()
 
     def generate_feature_path(self, index, new_root:str='data/VoxCeleb1', tag:str='_feat'):
         old_path, _, _, _ = self.get_metadata(index)
@@ -111,8 +117,23 @@ class VoxCelebDataset(VoxCeleb1Identification):
         return new_path
 
     def __getitem__(self, n: int) -> Tuple[Tensor, int]:
-        return super().__getitem__(n)[:2]
+        if self._ext_audio == '.wav':
+            return super().__getitem__(n)[:2]
+        else:
+            metadata = self.get_metadata(n)
+            pt = torch.load(os.path.join(self._path, metadata[0]))
+            spk_label = self.id2class[metadata[2]]
+            return (pt, spk_label) # (pt, spk_id)
 
+    def _map_spk_id(self)->int:
+        import os
+        spks = list()
+        with os.scandir(self.root) as it:
+            for entry in it:
+                if entry.is_dir() and entry.name not in self.VRF_TEST_SPEAKER_ID:
+                    spks.append(int(entry.name[3:]))
+        print(f"TOTAL {len(spks)} SPEAKERS ARE FOUND")
+        return {spk_id:i for i, spk_id in enumerate(spks)}
 
 class VoxCelebVerificationDataset(VoxCeleb1Verification):
     def __init__(self, root:str='data', subset:str='training', ext:str='wav', download=False):
