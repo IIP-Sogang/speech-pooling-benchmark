@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch import Tensor
 from torch.utils.data import DataLoader
 
-from .dataset import SpeechCommandDataset, VoxCelebDataset
+from .dataset import SpeechCommandDataset, VoxCelebDataset, IEMOCAPDataset
 
 
 
@@ -23,6 +23,14 @@ def load_dataset(data_name:str='speechcommands', get_collate_fn:bool=False, **kw
         for key in ['root', 'subset']:
             assert key in kwargs, f"Pass '{key}' through the config yaml file!!"
         dataset = VoxCelebDataset(**kwargs)
+        if get_collate_fn:
+            return dataset, pad_collate
+        else:
+            return dataset
+    elif data_name == 'iemocap':
+        for key in ['root']:
+            assert key in kwargs, f"Pass '{key}' through the config yaml file!!"
+        dataset = IEMOCAPDataset(**kwargs)
         if get_collate_fn:
             return dataset, pad_collate
         else:
