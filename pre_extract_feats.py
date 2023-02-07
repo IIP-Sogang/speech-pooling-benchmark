@@ -9,12 +9,14 @@ from dataloader.dataset import DATA_LIST
 from models.feats_extractor import *
 
 
-def main(data_name:str, root:str='data', new_root:str='data2', subset:str=None, tag:str='_feat', whole_layers:bool=False):
+def main(data_name:str, root:str='data', new_root:str='data2', url:str=None, subset:str=None, tag:str=None, layer_ids:str="1_12"):
     assert data_name in DATA_LIST, f"{data_name} IS NOT EXISTING DATASET!!"
 
-    DEVICE = 'cuda'if torch.cuda.is_available() else 'cpu'
+    if tag is None: tag = "_"+layer_ids
+    layer_ids = list(map(int, layer_ids.split('_')))
 
-    dataset = load_dataset(root=root, data_name=data_name, subset=subset) # should return (an audio array, sampling rate)
+    DEVICE = 'cuda'if torch.cuda.is_available() else 'cpu'
+    dataset = load_dataset(root=root, data_name=data_name, url=url, subset=subset, ext='wav') # should return (an audio array, sampling rate)
 
     extractor = Wav2VecExtractor().to(device=DEVICE)
     extractor.eval()
@@ -26,10 +28,13 @@ def main(data_name:str, root:str='data', new_root:str='data2', subset:str=None, 
             features = extractor.extract(waveform, sr)
             features = [feature.detach().cpu() for feature in features]
         features = torch.cat(features, axis=0)
-        if whole_layers:
-            torch.save(features, new_path) # Save all hidden features (initial + 12 layers)
-        else:
-            torch.save(features[-1], new_path) # Save last layer features
+        
+        # Save features from selected layers
+        save_features = list()
+        for layer_id in layer_ids:
+            save_features.append(features[layer_id])
+        save_features = torch.stack(save_features)
+        torch.save(save_features, new_path)
         
 
 if __name__=='__main__':
