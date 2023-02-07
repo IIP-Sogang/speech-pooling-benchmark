@@ -8,7 +8,7 @@
 
 ### 0. feature extraction
 ```
-python pre_extract_feats.py iemocap /home/nas4/DB/IEMOCAP /home/nas4/DB/IEMOCAP None _feat False
+python pre_extract_feats.py iemocap /home/nas4/DB/IEMOCAP /home/nas4/DB/IEMOCAP/IEMOCAP None _feat False
 ```
 
 
