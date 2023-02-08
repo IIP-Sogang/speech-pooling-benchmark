@@ -6,12 +6,20 @@ import importlib
 import warnings
 warnings.filterwarnings('ignore')
 
+from torch.utils.data import DataLoader
+
+import lightning_fabric as lf
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
-from torch.utils.data import DataLoader
-import lightning_fabric as lf
+from pytorch_lightning.profiler import SimpleProfiler, AdvancedProfiler, PyTorchProfiler, XLAProfiler
 
 from engine import SpeechModel
+
+PROFILERS = {
+    "simple": SimpleProfiler,
+    "advanced": AdvancedProfiler,
+    "pytorch": PyTorchProfiler,
+    "xla": XLAProfiler,}
 
 
 def train(config):
@@ -28,7 +36,7 @@ def train(config):
             dataset = training_dataset,
             batch_size=config['batch_size'],
             num_workers=config['num_workers'],
-            pin_memory=True,
+            pin_memory=False,
             collate_fn=train_collate_fn,
             **config.get('train_loader_config',{})
         )
@@ -37,7 +45,7 @@ def train(config):
             dataset = test_dataset,
             batch_size=config['batch_size'],
             num_workers=config['num_workers'],
-            pin_memory=True,
+            pin_memory=False,
             collate_fn=test_collate_fn,
             **config.get('test_loader_config',{})
         )
@@ -73,6 +81,8 @@ def train(config):
     if not (_TENSORBOARD_AVAILABLE or _TENSORBOARDX_AVAILABLE):
         print("Warning : Tensorboard is not available, CSV logger will be used.")
 
+    # ⚡⚡ Profiler
+    profiler = PROFILERS[config['profiler']](dirpath=config['default_root_dir'], filename='profile_report') if config['profiler'] else None
 
     # ⚡⚡ 5. LightningModule
     trainer = pl.Trainer(
@@ -88,7 +98,7 @@ def train(config):
         num_sanity_val_steps = config['num_sanity_val_steps'], # Sanity check runs n batches of val before starting the training routine. This catches any bugs in your validation without having to wait for the first validation check. 
         replace_sampler_ddp = True, # ⚡⚡
         gradient_clip_val=1.0, # ⚡⚡
-        profiler = config['profiler'], #
+        profiler = profiler,
     )
 
     # ⚡⚡ 6. Resume training
