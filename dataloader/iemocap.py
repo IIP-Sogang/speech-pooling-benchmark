@@ -5,11 +5,20 @@ from typing import Optional, Tuple, Union
 
 from torch import Tensor
 from torch.utils.data import Dataset
-from torchaudio.datasets.utils import _load_waveform
 
 
 _SAMPLE_RATE = 16000
 
+def _load_waveform(
+    root: str,
+    filename: str,
+    exp_sample_rate: int,
+):
+    path = os.path.join(root, filename)
+    waveform, sample_rate = torchaudio.load(path)
+    if exp_sample_rate != sample_rate:
+        raise ValueError(f"sample rate should be {exp_sample_rate}, but got {sample_rate}")
+    return waveform
 
 def _get_wavs_paths(data_dir):
     wav_dir = data_dir / "sentences" / "wav"
