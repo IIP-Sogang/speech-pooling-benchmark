@@ -8,8 +8,9 @@ import torch.nn.functional as F
 
 
 class SimpleAvgPool(nn.Module):
-    def __init__(self):
+    def __init__(self, use_last=True):
         super().__init__()
+        self.use_last = use_last
         # self.avgpool = nn.AdaptiveAvgPool1d(1)
 
     def forward(self, input_feature:Tensor):
@@ -21,9 +22,13 @@ class SimpleAvgPool(nn.Module):
             # return self.avgpool(input_feature.permute(0,2,1)).squeeze(-1)
             return input_feature.mean(1)
         elif input_feature.dim() == 4:
-            return input_feature.mean(2)
+            if self.use_last:
+                return input_feature[:, -1].mean(1)
+            else:
+                return input_feature.mean(2)
         else:
             raise Exception
+
 
 class SelfAttentivePooling(nn.Module):
     def __init__(self, input_dim:int = 768):
@@ -51,11 +56,11 @@ class SelfAttentivePooling(nn.Module):
 
 
 class WhiteningBERT(nn.Module):
-    def __init__(self, layer_ids:Union[str, int, List[int]]=None, whitening=True):
+    def __init__(self, layer_ids:List[int]=None, whitening=True):
         super().__init__()
         print("layers", layer_ids)
         print("whitening", whitening)
-        self.pool = SimpleAvgPool()
+        self.pool = SimpleAvgPool(use_last=False)
         self.layer_comb = LayerCombination(layer_ids=layer_ids)
         self.whitening = Whitening() if whitening else nn.Identity()
 
@@ -71,25 +76,17 @@ class WhiteningBERT(nn.Module):
 
 
 class LayerCombination(nn.Module):
-    def __init__(self, layer_ids:Union[str, int, List[int]]=None):
+    def __init__(self, layer_ids:List[int]=None):
         super().__init__()
-        if isinstance(layer_ids, str):
-            self.layer_ids = list(map(int, layer_ids.split()))
-        elif isinstance(layer_ids, int):
-            self.layer_ids = [layer_ids]
-        elif isinstance(layer_ids, list):
-            self.layer_ids = layer_ids
+        self.layer_ids = layer_ids
 
     def forward(self, input_feature:Tensor):
         """
         Input feature size should follow (Batch size, n_layers, Length, Dimension)
         Return speech representation which follows (Batch size, Length, Dimension)
         """
-        combinated_vector = torch.zeros_like(input_feature[:,0])
-        for layer_id in self.layer_ids:
-            combinated_vector += input_feature[:, layer_id]
-        combinated_feature = combinated_vector / len(self.layer_ids)
-        return combinated_feature
+        combined_feature = input_feature[:,self.layer_ids].mean(1)
+        return combined_feature
 
 
 class Whitening(nn.Module):
@@ -113,10 +110,17 @@ class Whitening(nn.Module):
         return whiten_feature
 
 
-def select_head(head_type:str='avgpool', 
+def select_method(head_type:str='avgpool', 
                 input_dim:int=768, layer_ids:Union[str,List[int],int]="1 12", whitening:bool=True, **kwargs):
+    if isinstance(layer_ids, str):
+        layer_ids = list(map(int, layer_ids.split()))
+    elif isinstance(layer_ids, int):
+        layer_ids = [layer_ids]
+    elif isinstance(layer_ids, list):
+        layer_ids = layer_ids
+
     if head_type=='avgpool':
-        return SimpleAvgPool()
+        return SimpleAvgPool(use_last=True)
     elif head_type=='sap':
         return SelfAttentivePooling(input_dim)
     elif head_type=='white':
