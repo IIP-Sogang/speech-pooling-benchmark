@@ -82,6 +82,7 @@ class SpeechCommandDataset(torchaudio.datasets.SPEECHCOMMANDS):
 
         return new_path
 
+
 # Speaker Verification
 def map_subset_voxceleb(subset:str):
     if subset=='training':
@@ -138,12 +139,13 @@ class VoxCelebDataset(VoxCeleb1Identification):
         print(f"TOTAL {len(spks)} SPEAKERS ARE FOUND")
         return {spk_id:i for i, spk_id in enumerate(spks)}
 
+
 class VoxCelebVerificationDataset(VoxCeleb1Verification):
-    def __init__(self, root:str='data', subset:str='training', ext:str='wav', download=False):
+    def __init__(self, root:str='data', subset:str='training', url:str='test_metadata.txt', ext:str='pt', download=False, **kwargs):
         assert subset in ['training','validation','testing']
         assert os.path.exists(root)
-        
-        super().__init__(root=root, meta_url='', download=download)
+        subset = map_subset_voxceleb(subset)
+        super().__init__(root=root, meta_url=url, download=download)
         self._ext_audio = '.'+ext
         self.root = root
         
@@ -171,20 +173,11 @@ class VoxCelebVerificationDataset(VoxCeleb1Verification):
         """
         if self._ext_audio == '.pt':
             metadata = self.get_metadata(n)
-            waveform_spk1 = torch.load(self._path, metadata[0], metadata[2])
-            waveform_spk2 = torch.load(self._path, metadata[1], metadata[2])
-            return (waveform_spk1, waveform_spk2) + metadata[2:]
+            waveform_spk1 = torch.load(os.path.join(self._path, metadata[0]))
+            waveform_spk2 = torch.load(os.path.join(self._path, metadata[0]))
+            return (waveform_spk1, waveform_spk2) + (metadata[3],) # label
         elif self._ext_audio == '.wav':
             return self.__getitem__(n)
-
-    def generate_feature_path(self, index, new_root:str='data/VoxCeleb1', tag:str='_feat'):
-        old_path = self.get_metadata(index)
-        new_path = old_path.replace(self.root, new_root+tag).replace('.wav','.pt')
-        
-        if not os.path.exists(os.path.dirname(new_path)):
-            os.makedirs(os.path.dirname(new_path))
-
-        return new_path
 
 
 def _load_list(root, *filenames):
@@ -194,8 +187,6 @@ def _load_list(root, *filenames):
         with open(filepath) as fileobj:
             output += [os.path.normpath(os.path.join(root, line.strip())) for line in fileobj]
     return output
-
-
 
 # Emotion Recognition
 def _get_wavs_paths(data_dir):
@@ -207,6 +198,7 @@ def _get_wavs_paths(data_dir):
         wav_path = wav_path[start:]
         relative_paths.append(wav_path)
     return relative_paths
+
 
 class IEMOCAPDataset(IEMOCAP):
     CLASS_LIST = ["neu", "hap", "ang", "sad"]

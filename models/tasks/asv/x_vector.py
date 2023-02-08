@@ -19,18 +19,16 @@ class X_vector(nn.Module):
         self.tdnn4 = TDNN(input_dim=512, output_dim=512, context_size=1, dilation=1,dropout_p=0.5)
         self.tdnn5 = TDNN(input_dim=512, output_dim=512, context_size=1, dilation=3,dropout_p=0.5)
         #### Frame levelPooling
-        # self.segment6 = nn.Linear(1024, 512)
-        # self.segment7 = nn.Linear(512, 512)
-        # self.output = nn.Linear(512, num_classes)
-        # self.softmax = nn.Softmax(dim=1)
+        self.segment6 = nn.Linear(1024, 512)
+        self.segment7 = nn.Linear(512, 512)
+        self.output = nn.Linear(512, num_classes)
+        self.softmax = nn.Softmax(dim=1)
     def forward(self, inputs):
         tdnn1_out = self.tdnn1(inputs)
         tdnn2_out = self.tdnn2(tdnn1_out)
         tdnn3_out = self.tdnn3(tdnn2_out)
         tdnn4_out = self.tdnn4(tdnn3_out)
         tdnn5_out = self.tdnn5(tdnn4_out)
-        pre_x_vec = tdnn5_out
-        return pre_x_vec #NOTE(@Park323) Return before pooling, (batch, length, dim)
 
         ### Stat Pool
         mean = torch.mean(tdnn5_out,1)
