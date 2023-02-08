@@ -6,6 +6,7 @@ from typing import Optional, Tuple, Union
 from torch import Tensor
 from torch.utils.data import Dataset
 
+import torchaudio
 
 _SAMPLE_RATE = 16000
 

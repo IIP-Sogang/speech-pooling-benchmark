@@ -37,7 +37,6 @@ class SpeechModel(pl.LightningModule):
 
         # calculate loss
         loss = self.loss_function(y_hat, y)
-
         # Logging to TensorBoard
         self.log("loss", loss, on_epoch= True, prog_bar=True, logger=True, sync_dist=True)
 
