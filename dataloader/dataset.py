@@ -10,7 +10,6 @@ import torchaudio
 from torch import Tensor
 
 from dataloader.voxceleb1 import VoxCeleb1Identification, VoxCeleb1Verification
-from dataloader.iemocap import IEMOCAP
 
 HASH_DIVIDER = "_nohash_"
 EXCEPT_FOLDER = "_background_noise_"
@@ -209,7 +208,11 @@ def _get_wavs_paths(data_dir):
     return relative_paths
 
 
-class IEMOCAPDataset(IEMOCAP):
+class IEMOCAPDataset(torchaudio.datasets.IEMOCAP):
+    CLASS_LIST = ["neu", "hap", "ang", "sad"]
+    CLASS_DICT = {class_:i for i, class_ in enumerate(CLASS_LIST)}
+    CLASS_DICT_INV = {value:key for key, value in CLASS_DICT.items()}
+
     def __init__(
         self,
         root: Union[str, Path],
@@ -217,6 +220,7 @@ class IEMOCAPDataset(IEMOCAP):
         utterance_type: Optional[str] = None,
         ext:str='wav',
         feature_path_tag:str='_feat_1_12',
+        final_classes: Tuple[str] = ("neu", "hap", "ang", "sad"),
         **kwargs,
     ):
         root = Path(root)
@@ -268,7 +272,7 @@ class IEMOCAPDataset(IEMOCAP):
                         label = line[2] # 'neu'
                         if wav_stem not in all_data: 
                             continue
-                        if label not in ["neu", "hap", "ang", "sad", "exc", "fru"]:
+                        if label not in final_classes: # ["neu", "hap", "ang", "sad", "exc", "fru"]
                             continue
                         self.mapping[wav_stem] = {}
                         self.mapping[wav_stem]["label"] = label
@@ -284,8 +288,9 @@ class IEMOCAPDataset(IEMOCAP):
             new_root = str(self._path)
             pt_path = self.generate_feature_path(n, new_root = new_root, tag = self.feature_path_tag)
             wav_path, sr, wav_stem, label, speaker = self.get_metadata(n)
+            emo_label = self.label2index(label)
 
-            return (torch.load(pt_path, map_location='cpu'), label)
+            return (torch.load(pt_path, map_location='cpu'), emo_label)
         else:
             return super().__getitem__(n)[:2] #Tuple[Tensor, int, str, str, int]
         
@@ -299,6 +304,13 @@ class IEMOCAPDataset(IEMOCAP):
             os.makedirs(os.path.dirname(new_path))
 
         return new_path
+    
+    def label2index(self, label):
+        return self.CLASS_DICT[label]
+
+    def index2label(self, index):
+        return self.CLASS_DICT_INV[index]
+        
         
 
 
