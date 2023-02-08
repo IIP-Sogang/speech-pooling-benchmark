@@ -10,6 +10,7 @@ import torchaudio
 from torch import Tensor
 
 from dataloader.voxceleb1 import VoxCeleb1Identification, VoxCeleb1Verification
+from dataloader.iemocap import IEMOCAP
 
 HASH_DIVIDER = "_nohash_"
 EXCEPT_FOLDER = "_background_noise_"
@@ -208,7 +209,7 @@ def _get_wavs_paths(data_dir):
     return relative_paths
 
 
-class IEMOCAPDataset(torchaudio.datasets.IEMOCAP):
+class IEMOCAPDataset(IEMOCAP):
     def __init__(
         self,
         root: Union[str, Path],
