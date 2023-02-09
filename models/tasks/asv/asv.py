@@ -15,19 +15,19 @@ class SpeakerVerificationModule(TaskDependentModule):
         super().__init__()
         self.pooling = select_method(head_type, **kwargs)
         self.linear = SimpleLinear(input_dim, input_dim)
-        self.fc = nn.Linear(input_dim, num_classes, bias=False)
+        self.fc = nn.Linear(input_dim, num_classes, bias=False) # AM-Softmax
 
     def forward(self, inputs:Tensor) -> Tensor:
         if self.training:
             aggregated = self.pooling(inputs)
-            sv_embedding = self.linear(aggregated)
+            sv_embedding = self.linear(aggregated) # 768
 
             # For additive margin softmax loss
             for W in self.fc.parameters():
                 W = F.normalize(W, dim=1)
             sv_embedding = F.normalize(sv_embedding, dim=1)
             outputs = self.fc(sv_embedding)
-            return outputs
+            return outputs # 1211
         else:
             return self.predict(inputs)
 
