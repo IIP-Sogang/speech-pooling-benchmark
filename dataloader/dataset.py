@@ -286,7 +286,7 @@ class IEMOCAPDataset(IEMOCAP):
             return super().__getitem__(n)[:2] #Tuple[Tensor, int, str, str, int]
         
 
-    def generate_feature_path(self, index, new_root:str='/home/nas4/DB/IEMOCAP/IEMOCAP', tag:str='_feat'):
+    def generate_feature_path(self, index, new_root:str='/home/nas4/DB/IEMOCAP/IEMOCAP', tag:str='_feat_1_12'):
         wav_path, _, _, _, _ = self.get_metadata(index)
         old_path = str(self._path / wav_path)
         new_path = old_path.replace(str(self._path), new_root+tag).replace('.wav','.pt')
@@ -305,3 +305,40 @@ class IEMOCAPDataset(IEMOCAP):
         
 
 
+class FluentSpeechCommandsDataset(torchaudio.datasets.FluentSpeechCommands):
+    def __init__(self, root: Union[str, Path] = '/home/nas4/DB/fluent_speech_commands', subset: str = "train", ext:str='wav'):
+        super().__init__(root=root, subset=subset)
+
+        self.ext = ext
+
+
+    def __getitem__(self, n: int) -> Tuple[Tensor, int]:
+        if self.ext == 'pt':
+            new_root = str(self._path)
+            pt_path = self.generate_feature_path(n, new_root = new_root, tag = self.feature_path_tag)
+            file_path, SAMPLE_RATE, file_name, speaker_id, transcription, action, obj, location = self.get_metadata(n)
+            label_dict = {
+                action: action,
+                obj: obj,
+                location: location
+                }
+
+            return (torch.load(pt_path, map_location='cpu'), label_dict)
+        else:
+            return super().__getitem__(n)[:2] #Tuple[Tensor, int, str, str, int]
+
+    def generate_feature_path(self, index, new_root:str='/home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset', tag:str='_feat_1_12'):
+        file_path, SAMPLE_RATE, file_name, speaker_id, transcription, action, obj, location = self.get_metadata(index)
+        # ex.
+        # file_path = 'wavs/speakers/7NqqnAOPVVSKnxyv/8b863c90-4627-11e9-bc65-55b32b211b66.wav'
+        # SAMPLE_RATE = 16000
+        # file_name = '8b863c90-4627-11e9-bc65-55b32b211b66'
+        # speaker_id = '7NqqnAOPVVSKnxyv'
+        # transcription = 'Turn on the lights'
+        # action = 'activate'
+        # obj = 'lights'
+        # location = 'none'
+        old_path = self._path  + file_path
+        new_path = old_path.replace(str(self._path), new_root+tag).replace('.wav','.pt')
+        
+        return new_path

@@ -43,6 +43,14 @@ def load_dataset(data_name:str='speechcommands', get_collate_fn:bool=False, **kw
             return dataset, pad_collate
         else:
             return dataset
+    elif data_name == 'fluentspeechcommand':
+        for key in ['root', 'subset']:
+            assert key in kwargs, f"Pass '{key}' through the config yaml file!!"
+        dataset = IEMOCAPDataset(**kwargs)
+        if get_collate_fn:
+            return dataset, pad_collate
+        else:
+            return dataset
     else:
         assert False, f"DATA '{data_name}' IS NOT IMPLEMENTD!"
 
