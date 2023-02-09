@@ -17,7 +17,8 @@ EXCEPT_FOLDER = "_background_noise_"
 DATA_LIST = [
     "speechcommands",
     "voxceleb",
-    "iemocap"
+    "iemocap",
+    'fluentspeechcommand'
 ]
 
 
@@ -174,7 +175,7 @@ class VoxCelebVerificationDataset(VoxCeleb1Verification):
         if self._ext_audio == '.pt':
             metadata = self.get_metadata(n)
             waveform_spk1 = torch.load(os.path.join(self._path, metadata[0]))
-            waveform_spk2 = torch.load(os.path.join(self._path, metadata[0]))
+            waveform_spk2 = torch.load(os.path.join(self._path, metadata[1]))
             return (waveform_spk1, waveform_spk2) + (metadata[3],) # label
         elif self._ext_audio == '.wav':
             return self.__getitem__(n)
@@ -306,10 +307,17 @@ class IEMOCAPDataset(IEMOCAP):
 
 
 class FluentSpeechCommandsDataset(torchaudio.datasets.FluentSpeechCommands):
-    def __init__(self, root: Union[str, Path] = '/home/nas4/DB/fluent_speech_commands', subset: str = "train", ext:str='wav'):
+    def __init__(self,
+                 root: Union[str, Path] = '/home/nas4/DB/fluent_speech_commands',
+                 subset: str = "train",
+                 ext:str='wav',
+                 feature_path_tag:str='_feat_1_12',                 
+                 **kwargs
+                 ):
         super().__init__(root=root, subset=subset)
 
         self.ext = ext
+        self.feature_path_tag = feature_path_tag
 
 
     def __getitem__(self, n: int) -> Tuple[Tensor, int]:
@@ -318,9 +326,9 @@ class FluentSpeechCommandsDataset(torchaudio.datasets.FluentSpeechCommands):
             pt_path = self.generate_feature_path(n, new_root = new_root, tag = self.feature_path_tag)
             file_path, SAMPLE_RATE, file_name, speaker_id, transcription, action, obj, location = self.get_metadata(n)
             label_dict = {
-                action: action,
-                obj: obj,
-                location: location
+                'action': action,
+                'obj': obj,
+                'location': location
                 }
 
             return (torch.load(pt_path, map_location='cpu'), label_dict)
@@ -338,7 +346,10 @@ class FluentSpeechCommandsDataset(torchaudio.datasets.FluentSpeechCommands):
         # action = 'activate'
         # obj = 'lights'
         # location = 'none'
-        old_path = self._path  + file_path
+        old_path = os.path.join(self._path, file_path)
         new_path = old_path.replace(str(self._path), new_root+tag).replace('.wav','.pt')
+
+        if not os.path.exists(os.path.dirname(new_path)):
+            os.makedirs(os.path.dirname(new_path))
         
         return new_path
