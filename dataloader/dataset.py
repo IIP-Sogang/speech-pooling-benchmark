@@ -175,7 +175,7 @@ class VoxCelebVerificationDataset(VoxCeleb1Verification):
         if self._ext_audio == '.pt':
             metadata = self.get_metadata(n)
             waveform_spk1 = torch.load(os.path.join(self._path, metadata[0]))
-            waveform_spk2 = torch.load(os.path.join(self._path, metadata[0]))
+            waveform_spk2 = torch.load(os.path.join(self._path, metadata[1]))
             return (waveform_spk1, waveform_spk2) + (metadata[3],) # label
         elif self._ext_audio == '.wav':
             return self.__getitem__(n)

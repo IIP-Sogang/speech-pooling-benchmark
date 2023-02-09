@@ -11,11 +11,11 @@ from models.tasks.absract import TaskDependentModule
 
 
 class SpeakerVerificationModule(TaskDependentModule):
-    def __init__(self, input_dim:int = 768, num_classes:int = 30, head_type='avgpool', **kwargs) -> None:
+    def __init__(self, input_dim:int = 768, num_classes:int = 1211, embedding_size:int = 512, head_type='avgpool', **kwargs) -> None:
         super().__init__()
         self.pooling = select_method(head_type, **kwargs)
-        self.linear = SimpleLinear(input_dim, input_dim)
-        self.fc = nn.Linear(input_dim, num_classes, bias=False) # AM-Softmax
+        self.linear = SimpleLinear(input_dim, embedding_size)
+        self.fc = nn.Linear(embedding_size, num_classes, bias=False) # AM-Softmax
 
     def forward(self, inputs:Tensor) -> Tensor:
         if self.training:
