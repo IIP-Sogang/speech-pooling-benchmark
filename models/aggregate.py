@@ -98,7 +98,6 @@ class Whitening(nn.Module):
         Input feature size should follow (Batch size, Length, Dimension)
         Return speech representation which follows (Batch size, Dimension)
         """
-        import pdb; pdb.set_trace()
         m = input_feature.mean(dim=0, keepdim=True)
         Cov = torch.mm((input_feature-m).T,(input_feature-m))
         # eigval, eigvec = torch.linalg.eig(Cov)
