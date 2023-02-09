@@ -19,6 +19,7 @@ def load_dataset(data_name:str='speechcommands', get_collate_fn:bool=False, **kw
             return dataset, pad_collate
         else:
             return dataset
+
     elif data_name == 'voxceleb':
         for key in ['root', 'subset']:
             assert key in kwargs, f"Pass '{key}' through the config yaml file!!"
@@ -35,6 +36,7 @@ def load_dataset(data_name:str='speechcommands', get_collate_fn:bool=False, **kw
             return dataset, collate_fn
         else:
             return dataset
+
     elif data_name == 'iemocap':
         for key in ['root']:
             assert key in kwargs, f"Pass '{key}' through the config yaml file!!"
@@ -43,7 +45,8 @@ def load_dataset(data_name:str='speechcommands', get_collate_fn:bool=False, **kw
             return dataset, pad_collate
         else:
             return dataset
-    elif data_name == 'fluentspeechcommand':
+
+    elif data_name == 'fluent':
         for key in ['root', 'subset']:
             assert key in kwargs, f"Pass '{key}' through the config yaml file!!"
         dataset = FluentSpeechCommandsDataset(**kwargs)

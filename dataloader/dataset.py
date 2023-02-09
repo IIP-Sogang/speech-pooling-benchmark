@@ -304,36 +304,101 @@ class IEMOCAPDataset(IEMOCAP):
         return self.CLASS_DICT_INV[index]
         
         
+class FluentSpeechCommandsDataset(torch.utils.data.Dataset):
 
+    SAMPLE_RATE = 16000
+    COMMANDS = [
+        ('activate', 'lamp', 'none'), ('activate', 'lights', 'bedroom'), ('activate', 'lights', 'kitchen'), 
+        ('activate', 'lights', 'none'), ('activate', 'lights', 'washroom'), ('activate', 'music', 'none'), 
+        ('bring', 'juice', 'none'), ('bring', 'newspaper', 'none'), ('bring', 'shoes', 'none'), ('bring', 'socks', 'none'), 
+        ('change language', 'Chinese', 'none'), ('change language', 'English', 'none'), ('change language', 'German', 'none'),
+         ('change language', 'Korean', 'none'), ('change language', 'none', 'none'), ('deactivate', 'lamp', 'none'), 
+         ('deactivate', 'lights', 'bedroom'), ('deactivate', 'lights', 'kitchen'), ('deactivate', 'lights', 'none'), 
+         ('deactivate', 'lights', 'washroom'), ('deactivate', 'music', 'none'), ('decrease', 'heat', 'bedroom'), 
+         ('decrease', 'heat', 'kitchen'), ('decrease', 'heat', 'none'), ('decrease', 'heat', 'washroom'), 
+         ('decrease', 'volume', 'none'), ('increase', 'heat', 'bedroom'), ('increase', 'heat', 'kitchen'), 
+         ('increase', 'heat', 'none'), ('increase', 'heat', 'washroom'), ('increase', 'volume', 'none')]
 
-class FluentSpeechCommandsDataset(torchaudio.datasets.FluentSpeechCommands):
-    def __init__(self,
-                 root: Union[str, Path] = '/home/nas4/DB/fluent_speech_commands',
-                 subset: str = "train",
-                 ext:str='wav',
-                 feature_path_tag:str='_feat_1_12',                 
-                 **kwargs
-                 ):
-        super().__init__(root=root, subset=subset)
+    COMMAND_DICT = {key:i for i, key in enumerate(COMMANDS)}
+
+    def __init__(
+        self,
+        root: Union[str, Path] = 'fluent_speech_commands',
+        subset: str = "train",
+        ext:str='wav',               
+        **kwargs
+    ):
+        subset = self.map_subset(subset)
+        if subset not in ["train", "valid", "test"]:
+            raise ValueError("`subset` must be one of ['train', 'valid', 'test']")
+
+        root = os.fspath(root)
+        self._path = root
+
+        if not os.path.isdir(self._path):
+            raise RuntimeError("Dataset not found.")
+
+        subset_path = os.path.join(self._path, "data", f"{subset}_data.csv")
+        with open(subset_path) as subset_csv:
+            import csv
+            subset_reader = csv.reader(subset_csv)
+            data = list(subset_reader)
+
+        self.header = data[0]
+        self.data = data[1:]
 
         self.ext = ext
-        self.feature_path_tag = feature_path_tag
-
+    
+    def __len__(self) -> int:
+        return len(self.data)
 
     def __getitem__(self, n: int) -> Tuple[Tensor, int]:
         if self.ext == 'pt':
-            new_root = str(self._path)
-            pt_path = self.generate_feature_path(n, new_root = new_root, tag = self.feature_path_tag)
-            file_path, SAMPLE_RATE, file_name, speaker_id, transcription, action, obj, location = self.get_metadata(n)
-            label_dict = {
-                'action': action,
-                'obj': obj,
-                'location': location
-                }
-
-            return (torch.load(pt_path, map_location='cpu'), label_dict)
+            metadata= self.get_metadata(n)
+            action, obj, location = metadata[-3:]
+            label = self.COMMAND_DICT[(action, obj, location)]
+            data = torch.load(self._path + "/" + metadata[0], map_location='cpu')
+            return data, label
         else:
-            return super().__getitem__(n)[:2] #Tuple[Tensor, int, str, str, int]
+            metadata = self.get_metadata(n)
+            waveform = _load_waveform(self._path, metadata[0], metadata[1])
+            return (waveform,) + (metadata[1],)
+            
+    def get_metadata(self, n: int) -> Tuple[str, int, str, int, str, str, str, str]:
+        """Get metadata for the n-th sample from the dataset. Returns filepath instead of waveform,
+        but otherwise returns the same fields as :py:func:`__getitem__`.
+
+        Args:
+            n (int): The index of the sample to be loaded
+
+        Returns:
+            Tuple of the following items;
+
+            str:
+                Path to audio
+            int:
+                Sample rate
+            str:
+                File name
+            int:
+                Speaker ID
+            str:
+                Transcription
+            str:
+                Action
+            str:
+                Object
+            str:
+                Location
+        """
+        sample = self.data[n]
+
+        file_name = sample[self.header.index("path")].split("/")[-1]
+        file_name = file_name.split(".")[0]
+        speaker_id, transcription, action, obj, location = sample[2:]
+        file_path = os.path.join("wavs", "speakers", speaker_id, f"{file_name}.{self.ext}")
+
+        return file_path, self.SAMPLE_RATE, file_name, speaker_id, transcription, action, obj, location
 
     def generate_feature_path(self, index, new_root:str='/home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset', tag:str='_feat_1_12'):
         file_path, SAMPLE_RATE, file_name, speaker_id, transcription, action, obj, location = self.get_metadata(index)
@@ -353,3 +418,26 @@ class FluentSpeechCommandsDataset(torchaudio.datasets.FluentSpeechCommands):
             os.makedirs(os.path.dirname(new_path))
         
         return new_path
+
+    @classmethod
+    def map_subset(cls, subset):
+        if subset.lower() == 'training':
+            return 'train'
+        elif subset.lower() == 'validation':
+            return 'valid'
+        elif subset.lower() == 'testing':
+            return 'test'
+        else:
+            return subset
+
+
+def _load_waveform(
+    root: str,
+    filename: str,
+    exp_sample_rate: int,
+):
+    path = os.path.join(root, filename)
+    waveform, sample_rate = torchaudio.load(path)
+    if exp_sample_rate != sample_rate:
+        raise ValueError(f"sample rate should be {exp_sample_rate}, but got {sample_rate}")
+    return waveform
