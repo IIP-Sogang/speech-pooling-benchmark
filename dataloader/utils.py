@@ -7,7 +7,7 @@ import torchaudio
 from torch import Tensor
 from torch.utils.data import DataLoader
 
-from .dataset import SpeechCommandDataset, VoxCelebDataset, IEMOCAPDataset, VoxCelebVerificationDataset
+from .dataset import SpeechCommandDataset, VoxCelebDataset, IEMOCAPDataset, VoxCelebVerificationDataset, FluentSpeechCommandsDataset
 
 
 def load_dataset(data_name:str='speechcommands', get_collate_fn:bool=False, **kwargs)->Tuple[torch.utils.data.Dataset, Optional[Callable]]:
@@ -46,7 +46,7 @@ def load_dataset(data_name:str='speechcommands', get_collate_fn:bool=False, **kw
     elif data_name == 'fluentspeechcommand':
         for key in ['root', 'subset']:
             assert key in kwargs, f"Pass '{key}' through the config yaml file!!"
-        dataset = IEMOCAPDataset(**kwargs)
+        dataset = FluentSpeechCommandsDataset(**kwargs)
         if get_collate_fn:
             return dataset, pad_collate
         else:
