@@ -18,7 +18,7 @@ DATA_LIST = [
     "speechcommands",
     "voxceleb",
     "iemocap",
-    'fluentspeechcommand'
+    'fluent'
 ]
 
 
@@ -74,7 +74,7 @@ class SpeechCommandDataset(torchaudio.datasets.SPEECHCOMMANDS):
     def index2label(self, index):
         return self.CLASS_DICT_INV[index]
 
-    def generate_feature_path(self, index, tag:str='_feat'):
+    def generate_feature_path(self, index, new_root:str=None, tag:str='_feat'):
         old_path = self.get_metadata(index)
         new_path = old_path.replace(self.folder_in_archive, self.folder_in_archive + tag).replace('.wav','.pt')
         
