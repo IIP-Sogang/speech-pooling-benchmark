@@ -18,7 +18,7 @@ DATA_LIST = [
     "speechcommands",
     "voxceleb",
     "iemocap",
-    'fluentspeechcommand'
+    'fluent'
 ]
 
 
