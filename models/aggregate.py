@@ -36,14 +36,21 @@ class SelfAttentivePooling(nn.Module):
         nn.init.xavier_normal_(out)
         return out
 
-    def forward(self, input_feature:Tensor):
+    def forward(self, input_feature:Tensor, input_lengths:Tensor):
         """
         Input feature size should follow (Batch size, Length, Dimension)
         Return speech representation which follows (Batch size, Dimension)
         """
-        h = torch.tanh(self.sap_linear(input_feature)) # 
+        batch_size, feat_len, _ = input_feature.shape
+
+        h = torch.tanh(self.sap_linear(input_feature))
         w = torch.matmul(h, self.attention).squeeze(dim=2)
-        w = F.softmax(w, dim=1).view(input_feature.size(0), input_feature.size(1), 1) # 
+
+        # If length = 2, mask = [[1, 1, 0, 0, 0, ...]]
+        mask = torch.arange(feat_len)[None, :].to(w.device) < input_lengths[:, None]
+        w = w + (~mask) * (w.min() - 20)
+
+        w = F.softmax(w, dim=1).view(batch_size, feat_len, 1) # 
         feature = torch.sum(input_feature * w, dim=1) 
 
         return feature
