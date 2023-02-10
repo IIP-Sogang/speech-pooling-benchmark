@@ -24,7 +24,8 @@ python pre_extract_feats.py fluentspeechcommand /home/nas4/DB/fluent_speech_comm
 
 ### 1. train
 ```
-CUDA_VISIBLE_DEVICES=0 python main.py --config ./configs/esc_50.yaml --mode train
+# EMOTION RECOGNITION
+CUDA_VISIBLE_DEVICES=0 python main.py --config ./configs/er_avg.yaml --mode train
 ```
 
 
