@@ -78,11 +78,11 @@ class SpeechModel(pl.LightningModule):
 
 
     def training_step(self, batch, batch_idx):
-        x, y = batch
+        x, x_length, y = batch
         # preprocess
         
         # inference
-        y_hat = self.model(x)
+        y_hat = self.model(x, x_length)
 
         # post processing
 
@@ -95,8 +95,8 @@ class SpeechModel(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         # this is the test loop
-        x, y = batch
-        y_hat = self.model(x)
+        x, x_length, y = batch
+        y_hat = self.model(x, x_length)
         loss_function = test_loss_switch(self.loss_function, self.metric)
         loss = loss_function(y_hat, y)
         self.log("test_loss", loss,  on_epoch= True, prog_bar=True, logger=True, sync_dist=True)
@@ -109,8 +109,8 @@ class SpeechModel(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         # this is the validation loop
-        x, y = batch
-        y_hat = self.model(x)
+        x, x_length, y = batch
+        y_hat = self.model(x, x_length)
         loss_function = test_loss_switch(self.loss_function, self.metric)
         loss = loss_function(y_hat, y)
         self.log("val_loss", loss,  on_epoch= True, prog_bar=True, logger=True, sync_dist=True)
