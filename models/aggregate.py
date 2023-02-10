@@ -44,13 +44,13 @@ class SelfAttentivePooling(nn.Module):
         assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
         input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
 
-        batch_size, feat_len, _ = input_feature.shape
+        batch_size, feat_len, _ = input_feature.shape # (Batch size, Length, Dimension)
 
-        h = torch.tanh(self.sap_linear(input_feature))
-        w = torch.matmul(h, self.attention).squeeze(dim=2)
+        h = torch.tanh(self.sap_linear(input_feature)) # (Batch size, Length, Dimension)
+        w = torch.matmul(h, self.attention).squeeze(dim=2) # (Batch size, Length)
 
         # If length = 2, mask = [[1, 1, 0, 0, 0, ...]]
-        mask = torch.arange(feat_len)[None, :].to(w.device) < input_lengths[:, None]
+        mask = torch.arange(feat_len)[None, :].to(w.device) < input_lengths
         w = w + (~mask) * (w.min() - 20)
 
         w = F.softmax(w, dim=1).view(batch_size, feat_len, 1) # 

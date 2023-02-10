@@ -82,7 +82,6 @@ class SpeechModel(pl.LightningModule):
     def training_step(self, batch, batch_idx):
 
         if self.method == 'conv_feature':
-            import pdb; pdb.set_trace()
             x_tr, x_conv, x_length, y = batch
             # ⚡ ⚡ ⚡ Vector quantization ⚡ ⚡ ⚡
             x = vector_quantizer(x_tr, x_conv)

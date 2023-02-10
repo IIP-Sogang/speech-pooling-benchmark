@@ -6,8 +6,6 @@ import torch.nn as nn
 def vector_quantizer(x_tr, x_conv):
     # x_tr [BATCH, 2, TIME FRAME, DIM]
     # x_conv : [BATCH, TIME FRAME, 2]
-    import pdb;pdb.set_trace()
-
     
     int_distance = x_conv[:, :-1, :] - x_conv[:, 1:, :] # [BATCH, TIME FRAME -1, 2]
     int_distance = int_distance.sum(-1) # [BATCH, TIME FRAME -1]
@@ -19,7 +17,11 @@ def vector_quantizer(x_tr, x_conv):
     x = x.unsqueeze(dim = 1)  # [BATCH, 1, TIME FRAME]
     x = x.unsqueeze(dim = 3) # [BATCH, 1, TIME FRAME, 1]
     
-    x_tr = x_tr[:, -1, :] # select final transformer layer [BATCH, 1, TIME FRAME, DIM]
+    # x_tr = x_tr[:, -1, :, :] # select final transformer layer [BATCH, TIME FRAME, DIM]
+    # x_tr = x_tr.unsqueeze(dim = 1) # [BATCH, 1, TIME FRAME, DIM]
 
     x = x_tr * x
-    return x # [BATCH, 1, TIME FRAME, DIM]
+        # x_tr : [BATCH, 2, TIME FRAME, DIM]
+        # x: [BATCH, 1, TIME FRAME, 1]
+        # x(@result): [BATCH, 2, TIME FRAME, DIM]
+    return x # [BATCH, 2, TIME FRAME, DIM]

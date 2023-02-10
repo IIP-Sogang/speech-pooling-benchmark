@@ -164,20 +164,18 @@ def pad_collate_vq(batch:List[Tuple[Tensor, int]]):
     if batch_dim == 2:
         raise ValueError("check batch dimmension of conv_data")
     elif batch_dim == 3:    
-        conv_data = torch.zeros((batch_size, batch_transformer_sample.size(-2), 2))
+        conv_data = torch.zeros((batch_size, transformer_max_array_length, 2))
 
     labels = torch.zeros((batch_size, ), dtype=torch.long)
     
-    for i, (transformer_array, conv_array, label) in enumerate(batch):
+    for i, (tr_array, cv_array, label) in enumerate(batch):
         if batch_dim == 2:
-            transformer_data[i, :len(transformer_array)] = transformer_array
+            transformer_data[i, :len(tr_array)] = tr_array
             raise ValueError("check batch dimmension of conv_data")
         else:
-            print(transformer_array.shape, conv_array.shape)
-            transformer_data[i, :, :transformer_array.size(1), :] = transformer_array
-            conv_data[i, :conv_array.size(0), :] = conv_array
-            print(transformer_data[i, :, :transformer_array.size(1), :].shape, conv_data[i, :conv_array.size(0), :].shape)
-            assert transformer_array.size(1) == conv_array.size(0), "check time frame size (@ collator)"
+            transformer_data[i, :, :tr_array.size(1), :] = tr_array
+            conv_data[i, :cv_array.size(0), :] = cv_array
+            assert tr_array.size(1) == cv_array.size(0), "check time frame size (@ collator)"
         labels[i] = label
 
     return transformer_data, conv_data, transformer_max_array_length, labels
