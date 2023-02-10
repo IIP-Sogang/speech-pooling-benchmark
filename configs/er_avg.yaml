@@ -1,0 +1,76 @@
+# 1. DataLoader
+training_dataset_config:
+  data_name: 'iemocap'
+  root: '/home/nas4/DB/IEMOCAP'
+  sessions: [1, 2, 3, 4]
+  utterance_type: null # "scripted" or "improvised" or null. if null it contain both ["scripted" and "improvised"]
+  ext: 'pt'
+  feature_path_tag: '_feat_1_12'
+  final_classes: ["neu", "hap", "ang", "sad"] # we drop the unbalance emotion classes to leave the final four classes (neutral, happy, sad, angry)
+train_loader_config:
+  shuffle: True
+test_dataset_config:
+  data_name: 'iemocap'
+  root: '/home/nas4/DB/IEMOCAP'
+  sessions: [5]
+  utterance_type: null
+  ext: 'pt'
+  feature_path_tag: '_feat_1_12'
+  final_classes: ["neu", "hap", "ang", "sad"] # we drop the unbalance emotion classes to leave the final four classes (neutral, happy, sad, angry)
+test_loader_config:
+  shuffle: False
+
+batch_size: 32
+num_workers: 8
+
+
+# 2. Model
+model: EmotionRecognitionModule
+model_config:
+  input_dim: 768
+  num_classes: 4
+  head_type: 'avgpool'
+
+task_config:
+  sample_input_size: 10 97 768 # Batch length dimmension
+
+
+# 3. Optimizer
+optimizer: adam
+optimizer_config:
+  lr: 0.001
+  weight_decay: 0.0001
+
+
+# 4. LossFunction
+loss: clip_ce
+
+
+# 5. Scheduler
+scheduler: steplr
+scheduler_config:
+  step_size: 50
+  gamma: 0.9
+  last_epoch: -1
+
+
+# 6. Trainer
+default_root_dir: ./results/er_avg
+profiler: null #advanced
+max_epoch: 200
+devices: 1
+accelerator: cuda
+num_sanity_val_steps: -1
+
+
+# 7. Checkpoint
+resume_checkpoint: null # "results/kws_avg/lightning_logs/version_17/checkpoints/AVG-SpeechCommandsV2-epoch=56-val_loss=0.43-val_ACC=89.03.ckpt"
+checkpoint_config:
+  save_top_k: 5
+  monitor: "val_ACC"
+  mode: "max"
+  filename: "emotion-recognition-{epoch:02d}-{val_loss:.2f}-{val_ACC:02.2f}"
+
+
+# 8. Random Seed
+random_seed: 2301235
