@@ -16,12 +16,12 @@ class EmotionRecognitionModule(TaskDependentModule):
         self.head = select_method(head_type, **kwargs)
         self.linear = SimpleLinear(input_dim, num_classes)
 
-    def forward(self, inputs) -> Tensor:
-        speech_representation = self.head(inputs)
+    def forward(self, inputs, input_lengths) -> Tensor:
+        speech_representation = self.head(inputs, input_lengths)
         outputs = self.linear(speech_representation)
         return outputs
 
-    def predict(self, inputs) -> Union[int, Tensor]:
-        speech_representation = self.head(inputs)
+    def predict(self, inputs, input_lengths) -> Union[int, Tensor]:
+        speech_representation = self.head(inputs, input_lengths)
         outputs = self.linear(speech_representation)
         return outputs.max(-1)

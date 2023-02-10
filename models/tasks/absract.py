@@ -10,9 +10,9 @@ class TaskDependentModule(nn.Module, ABC):
         pass
 
     @abstractmethod
-    def forward(self, inputs) -> Tensor:
+    def forward(self, inputs, input_lengths) -> Tensor:
         pass
 
     @abstractmethod
-    def predict(self, inputs) -> Union[int, Tensor]:
+    def predict(self, inputs, input_lengths) -> Union[int, Tensor]:
         pass

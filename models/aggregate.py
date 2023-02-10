@@ -8,26 +8,20 @@ import torch.nn.functional as F
 
 
 class SimpleAvgPool(nn.Module):
-    def __init__(self, use_last=True):
+    def __init__(self, use_last=False):
         super().__init__()
         self.use_last = use_last
         # self.avgpool = nn.AdaptiveAvgPool1d(1)
 
-    def forward(self, input_feature:Tensor):
+    def forward(self, input_feature:Tensor, input_lengths:Tensor):
         """
-        Input feature size should follow (Batch size, Length, Dimension) or (Batch size, n_layers, Length, Dimension)
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
         Return speech representation which follows (Batch size, Dimension)
         """
-        if input_feature.dim() == 3:
-            # return self.avgpool(input_feature.permute(0,2,1)).squeeze(-1)
-            return input_feature.mean(1)
-        elif input_feature.dim() == 4:
-            if self.use_last:
-                return input_feature[:, -1].mean(1)
-            else:
-                return input_feature.mean(2)
-        else:
-            raise Exception
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1:] if self.use_last else input_feature
+        outputs = input_feature.sum(2) / input_lengths[:,None,None]
+        return outputs[:,0] if self.use_last else outputs
 
 
 class SelfAttentivePooling(nn.Module):
@@ -60,7 +54,7 @@ class WhiteningBERT(nn.Module):
         super().__init__()
         print("layers", layer_ids)
         print("whitening", whitening)
-        self.pool = SimpleAvgPool(use_last=False)
+        self.pool = SimpleAvgPool()
         self.layer_comb = LayerCombination(layer_ids=layer_ids)
         self.whitening = Whitening() if whitening else nn.Identity()
 

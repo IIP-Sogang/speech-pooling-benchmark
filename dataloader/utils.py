@@ -66,8 +66,10 @@ def pad_collate(batch:List[Tuple[Tensor, int]]):
     max_array_length = 0
 
     search_dim = 0 if batch_dim == 2 else 1
-    for array, _ in batch:
-        if array.size(search_dim)>max_array_length: max_array_length = array.size(search_dim)
+    data_lengths = torch.zeros((batch_size,), dtype=torch.long)
+    for i, (array, _) in enumerate(batch):
+        data_lengths[i] = array.size(search_dim)
+    max_array_length = data_lengths.max()
 
     data = torch.zeros((batch_size, max_array_length, batch_sample.size(-1))) if batch_dim == 2 \
            else torch.zeros((batch_size, batch_sample.size(0), max_array_length, batch_sample.size(-1)))
@@ -80,13 +82,14 @@ def pad_collate(batch:List[Tuple[Tensor, int]]):
             data[i, :, :array.size(1)] = array
         labels[i] = label
 
-    return data, labels
+    return data, data_lengths, labels
 
 
 def pad_double_collate(batch:List[Tuple[Tensor, Tensor, int]]):
     """
     Return
     data : Tensor (2, batch size, length) or (2, batch size, dimension, length)
+    data_lengths : Tensor (2, batch size) or (2, batch size)
     labels : Tensor (batch size, )
     """
     batch_size = len(batch)
@@ -96,9 +99,11 @@ def pad_double_collate(batch:List[Tuple[Tensor, Tensor, int]]):
     max_array_length = 0
 
     search_dim = 0 if batch_dim == 2 else 1
-    for array1, array2, _ in batch:
-        for array in [array1, array2]:
-            if array.size(search_dim)>max_array_length: max_array_length = array.size(search_dim)
+    data_lengths = torch.zeros((2, batch_size,), dtype=torch.long)
+    for i, (array1, array2, _) in enumerate(batch):
+        for j, array in enumerate([array1, array2]):
+            data_lengths[j][i] = array.size(search_dim)
+    max_array_length = data_lengths.max()
 
     data = torch.zeros((2, batch_size, max_array_length, batch_sample.size(-1))) if batch_dim == 2 \
            else torch.zeros((2, batch_size, batch_sample.size(0), max_array_length, batch_sample.size(-1)))
@@ -113,4 +118,4 @@ def pad_double_collate(batch:List[Tuple[Tensor, Tensor, int]]):
             data[1, i, :, :array2.size(1)] = array2
         labels[i] = label
 
-    return data, labels
+    return data, data_lengths, labels

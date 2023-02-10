@@ -17,9 +17,9 @@ class SpeakerVerificationModule(TaskDependentModule):
         self.linear = SimpleLinear(input_dim, embedding_size)
         self.fc = nn.Linear(embedding_size, num_classes, bias=False) # AM-Softmax
 
-    def forward(self, inputs:Tensor) -> Tensor:
+    def forward(self, inputs:Tensor, input_lengths) -> Tensor:
         if self.training:
-            aggregated = self.pooling(inputs)
+            aggregated = self.pooling(inputs, input_lengths)
             sv_embedding = self.linear(aggregated) # 768
 
             # For additive margin softmax loss
@@ -31,12 +31,12 @@ class SpeakerVerificationModule(TaskDependentModule):
         else:
             return self.predict(inputs)
 
-    def predict(self, inputs:Tensor) -> Tensor:
+    def predict(self, inputs:Tensor, input_lengths) -> Tensor:
         assert inputs.size(0) == 2, "Two Speakers are needed for Verification Task!!"
-        aggregated_0 = self.pooling(inputs[0])
+        aggregated_0 = self.pooling(inputs[0], input_lengths[0])
         sv_embedding_0 = self.linear(aggregated_0)
         
-        aggregated_1 = self.pooling(inputs[1])
+        aggregated_1 = self.pooling(inputs[1], input_lengths[1])
         sv_embedding_1 = self.linear(aggregated_1)
 
         outputs = F.cosine_similarity(sv_embedding_0, sv_embedding_1, dim=1)
