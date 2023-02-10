@@ -23,9 +23,10 @@ PROFILERS = {
 
 
 def train(config):
-    # sets seeds for numpy, torch and python.random.   
+   
+    # check training configuration
+    assert config['training_dataset_config']['method'] == config['task_config']['method'], "check training method!"
 
-    # lf.utilities.seed.seed_everything(seed = config['random_seed'])
 
     # ⚡⚡ 1. Set 'Dataset', 'DataLoader'  
     from dataloader.utils import load_dataset

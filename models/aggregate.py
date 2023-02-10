@@ -38,9 +38,12 @@ class SelfAttentivePooling(nn.Module):
 
     def forward(self, input_feature:Tensor, input_lengths:Tensor):
         """
-        Input feature size should follow (Batch size, Length, Dimension)
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
         Return speech representation which follows (Batch size, Dimension)
         """
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
+
         batch_size, feat_len, _ = input_feature.shape
 
         h = torch.tanh(self.sap_linear(input_feature))
