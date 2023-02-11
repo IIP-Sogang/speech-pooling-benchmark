@@ -164,7 +164,7 @@ def pad_collate_vq(batch:List[Tuple[Tensor, int]]):
     if batch_dim == 2:
         raise ValueError("check batch dimmension of conv_data")
     elif batch_dim == 3:    
-        conv_data = torch.zeros((batch_size, transformer_max_array_length, 2))
+        conv_data = torch.ones((batch_size, transformer_max_array_length, 2)) * -1
 
     labels = torch.zeros((batch_size, ), dtype=torch.long)
     
