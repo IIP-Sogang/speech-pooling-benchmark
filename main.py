@@ -59,8 +59,9 @@ def train(config):
 
     loss_function = importlib.import_module("loss." + config['loss']).__getattribute__("loss_function")
 
-    scheduler = importlib.import_module("scheduler." + config['scheduler']).__getattribute__("Scheduler")
-    scheduler = scheduler(optimizer, **config['scheduler_config'])
+    if config['scheduler']:
+        scheduler = importlib.import_module("scheduler." + config['scheduler']).__getattribute__("Scheduler")
+        scheduler = scheduler(optimizer, **config['scheduler_config'])
 
 
     # ⚡⚡  3. Set 'engine' for training/validation and 'Trainer' 
@@ -97,7 +98,6 @@ def train(config):
         accelerator = config['accelerator'], #
         num_sanity_val_steps = config['num_sanity_val_steps'], # Sanity check runs n batches of val before starting the training routine. This catches any bugs in your validation without having to wait for the first validation check. 
         replace_sampler_ddp = True, # ⚡⚡
-        gradient_clip_val=1.0, # ⚡⚡
         profiler = profiler,
     )
 

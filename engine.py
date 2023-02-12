@@ -13,6 +13,19 @@ def acc_calculate(step_outputs:dict, name:str='val'):
     acc = correct_score/total_size
     return name+'_ACC', acc*100
 
+def slot_acc_step(y_hat, y):
+    # slot1: 6 /slot2: 14 /slot3: 4
+    slot_start = 0
+    slot_sizes = [6, 14, 4]
+    preds = list()
+    for size in slot_sizes:
+        preds.append(y_hat[:,slot_start:slot_start+size].argmax(-1))
+        slot_start += size
+    preds = torch.stack(preds, dim=-1)
+    correct = (preds == y).prod(1).sum().item()
+    size = y.shape[0]
+    return {'correct': correct, 'size': size}
+
 def eer_step(y_hat, y):
     return {'label': y, 'sim':y_hat}
 
@@ -32,15 +45,20 @@ def eer_calculate(step_outputs:dict, name:str='val'):
 
 def test_loss_switch(func, metric:str):
     # Switch loss function, only for evaluation
+    from loss.cosine_emb import loss_function as cos_loss
+    
     if metric == "eer":
-        from loss.cosine_emb import loss_function
-        return loss_function
+        return cos_loss
     else:
         return func
 
 MetricFuncs = dict(
     acc=dict(
         step_func=acc_step,
+        epoch_func=acc_calculate
+    ),
+    slot_acc=dict(
+        step_func=slot_acc_step,
         epoch_func=acc_calculate
     ),
     eer=dict(
@@ -78,11 +96,11 @@ class SpeechModel(pl.LightningModule):
 
 
     def training_step(self, batch, batch_idx):
-        x, x_len, y = batch
+        x, x_length, y = batch
         # preprocess
         
         # inference
-        y_hat = self.model(x, x_len)
+        y_hat = self.model(x, x_length)
 
         # post processing
 
@@ -95,8 +113,8 @@ class SpeechModel(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         # this is the test loop
-        x, x_len, y = batch
-        y_hat = self.model(x, x_len)
+        x, x_length, y = batch
+        y_hat = self.model(x, x_length)
         loss_function = test_loss_switch(self.loss_function, self.metric)
         loss = loss_function(y_hat, y)
         self.log("test_loss", loss,  on_epoch= True, prog_bar=True, logger=True, sync_dist=True)
@@ -109,8 +127,8 @@ class SpeechModel(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         # this is the validation loop
-        x, x_len, y = batch
-        y_hat = self.model(x, x_len)
+        x, x_length, y = batch
+        y_hat = self.model(x, x_length)
         loss_function = test_loss_switch(self.loss_function, self.metric)
         loss = loss_function(y_hat, y)
         self.log("val_loss", loss,  on_epoch= True, prog_bar=True, logger=True, sync_dist=True)
