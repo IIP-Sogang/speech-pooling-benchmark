@@ -23,11 +23,6 @@ PROFILERS = {
 
 
 def train(config):
-   
-    # check training configuration
-    assert config['training_dataset_config']['method'] == config['task_config']['method'], "check training method!"
-
-
     # ⚡⚡ 1. Set 'Dataset', 'DataLoader'  
     from dataloader.utils import load_dataset
     training_dataset, train_collate_fn = load_dataset(**config['training_dataset_config'], get_collate_fn=True)
@@ -60,9 +55,8 @@ def train(config):
 
     loss_function = importlib.import_module("loss." + config['loss']).__getattribute__("loss_function")
 
-    if config['scheduler']:
-        scheduler = importlib.import_module("scheduler." + config['scheduler']).__getattribute__("Scheduler")
-        scheduler = scheduler(optimizer, **config['scheduler_config'])
+    scheduler = importlib.import_module("scheduler." + config['scheduler']).__getattribute__("Scheduler")
+    scheduler = scheduler(optimizer, **config['scheduler_config'])
 
 
     # ⚡⚡  3. Set 'engine' for training/validation and 'Trainer' 
