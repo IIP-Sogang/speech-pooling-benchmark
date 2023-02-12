@@ -10,7 +10,7 @@ from models.modules import SimpleLinear
 from models.tasks.absract import TaskDependentModule
 
 
-class IntentClassificationModule(TaskDependentModule):
+class SimpleClassificationModule(TaskDependentModule):
     def __init__(self, input_dim:int = 768, num_classes:int = 26, head_type='avgpool', **kwargs) -> None:
         super().__init__()
         self.head = select_method(head_type, **kwargs)
@@ -21,7 +21,7 @@ class IntentClassificationModule(TaskDependentModule):
         outputs = self.linear(speech_representation)
         return outputs
 
-    def predict(self, inputs, input_lengths) -> Union[int, Tensor]:
-        speech_representation = self.head(inputs, input_lengths)
+    def predict(self, inputs, input_lengths, *args) -> Union[int, Tensor]:
+        speech_representation = self.head(inputs, input_lengths, *args)
         outputs = self.linear(speech_representation)
         return outputs.max(-1)
