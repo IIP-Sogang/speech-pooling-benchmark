@@ -1,6 +1,6 @@
 import pytorch_lightning as pl
 import torch
-from models.tasks.utils import vector_quantizer
+from models.tasks.utils import vector_quantizer, _shrink
 
 
 def acc_step(y_hat, y):
@@ -84,8 +84,8 @@ class SpeechModel(pl.LightningModule):
         if self.method == 'conv_feature':
             x_tr, x_conv, x_length, y = batch
             # ⚡ ⚡ ⚡ Vector quantization ⚡ ⚡ ⚡
-            x = vector_quantizer(x_tr, x_conv)
-
+            x = _shrink(x_tr, x_conv)
+            # x = vector_quantizer(x_tr, x_conv)
         else:
             x, x_length, y = batch
         # preprocess
@@ -107,8 +107,8 @@ class SpeechModel(pl.LightningModule):
         if self.method == 'conv_feature':
             x_tr, x_conv, x_length, y = batch
             # ⚡ ⚡ ⚡ Vector quantization ⚡ ⚡ ⚡
-            x = vector_quantizer(x_tr, x_conv)
-
+            x = _shrink(x_tr, x_conv)
+            # x = vector_quantizer(x_tr, x_conv)
         else:
             x, x_length, y = batch
 
@@ -128,7 +128,8 @@ class SpeechModel(pl.LightningModule):
         if self.method == 'conv_feature':
             x_tr, x_conv, x_length, y = batch
             # ⚡ ⚡ ⚡ Vector quantization ⚡ ⚡ ⚡
-            x = vector_quantizer(x_tr, x_conv)
+            x = _shrink(x_tr, x_conv)
+            # x = vector_quantizer(x_tr, x_conv)
         else:
             x, x_length, y = batch
             
