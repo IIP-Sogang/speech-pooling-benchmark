@@ -99,17 +99,12 @@ class SpeechModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
 
-        if self.method == 'conv_feature':
-            x_tr, x_conv, x_length, y = batch
-            # ⚡ ⚡ ⚡ Vector quantization ⚡ ⚡ ⚡
-            x = _shrink(x_tr, x_conv)
-            # x = vector_quantizer(x_tr, x_conv)
-        else:
-            x, x_length, y = batch
+        x = batch[:-1] # (Input, Input_lengths) or (Input, Input_vq_indices, Input_lengths)
+        y = batch[-1]
         # preprocess
         
         # inference
-        y_hat = self.model(x, x_length)
+        y_hat = self.model(*x)
 
         # post processing
 
@@ -122,15 +117,10 @@ class SpeechModel(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         # this is the test loop
-        if self.method == 'conv_feature':
-            x_tr, x_conv, x_length, y = batch
-            # ⚡ ⚡ ⚡ Vector quantization ⚡ ⚡ ⚡
-            x = _shrink(x_tr, x_conv)
-            # x = vector_quantizer(x_tr, x_conv)
-        else:
-            x, x_length, y = batch
+        x = batch[:-1]
+        y = batch[-1]
 
-        y_hat = self.model(x, x_length)
+        y_hat = self.model(*x)
         loss_function = test_loss_switch(self.loss_function, self.metric)
         loss = loss_function(y_hat, y)
         self.log("test_loss", loss,  on_epoch= True, prog_bar=True, logger=True, sync_dist=True)
@@ -143,15 +133,10 @@ class SpeechModel(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         # this is the validation loop
-        if self.method == 'conv_feature':
-            x_tr, x_conv, x_length, y = batch
-            # ⚡ ⚡ ⚡ Vector quantization ⚡ ⚡ ⚡
-            x = _shrink(x_tr, x_conv)
-            # x = vector_quantizer(x_tr, x_conv)
-        else:
-            x, x_length, y = batch
-            
-        y_hat = self.model(x, x_length)
+        x = batch[:-1]
+        y = batch[-1]
+
+        y_hat = self.model(*x)
         loss_function = test_loss_switch(self.loss_function, self.metric)
         loss = loss_function(y_hat, y)
         self.log("val_loss", loss,  on_epoch= True, prog_bar=True, logger=True, sync_dist=True)

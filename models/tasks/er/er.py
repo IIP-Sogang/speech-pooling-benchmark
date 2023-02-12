@@ -16,8 +16,8 @@ class EmotionRecognitionModule(TaskDependentModule):
         self.head = select_method(head_type, **kwargs)
         self.linear = SimpleLinear(input_dim, num_classes)
 
-    def forward(self, inputs, input_lengths) -> Tensor:
-        speech_representation = self.head(inputs, input_lengths)
+    def forward(self, inputs, input_lengths, *args) -> Tensor:
+        speech_representation = self.head(inputs, input_lengths, *args)
         outputs = self.linear(speech_representation)
         return outputs
 
