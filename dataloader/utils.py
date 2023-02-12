@@ -171,7 +171,44 @@ def pad_double_collate(batch:List[Tuple[Tensor, Tensor, int]]):
 
     return data, data_lengths, labels
 
+
 def pad_collate_vq(batch:List[Tuple[Tensor, int]]):
+    # batch : [batch, [transformer_features, conv_features, label]]
+
+    batch_size = len(batch)
+    batch_transformer_sample = batch[0][0]
+    batch_dim = len(batch_transformer_sample.shape)
+
+    search_dim = 0 if batch_dim == 2 else 1 # 1
+
+    transformer_data_lengths = torch.zeros((batch_size,), dtype=torch.long)
+    for i, (transformer_array, _, _) in enumerate(batch):
+        transformer_data_lengths[i] = transformer_array.size(search_dim) # transformer_array : [2, time frame, channel], in that case search dimmension is 1
+    transformer_max_array_length = transformer_data_lengths.max()
+
+
+    transformer_data = torch.zeros((batch_size, transformer_max_array_length, batch_transformer_sample.size(-1))) if batch_dim == 2 \
+           else torch.zeros((batch_size, batch_transformer_sample.size(0), transformer_max_array_length, batch_transformer_sample.size(-1)))
+    
+
+    labels = torch.zeros((batch_size, ), dtype=torch.long)
+    
+    conv_feats = []
+    
+    for i, (array, array_conv,  label) in enumerate(batch):
+        if batch_dim == 2:
+            transformer_data[i, :len(array)] = array
+            conv_feats.append(array_conv)
+        else:
+            transformer_data[i, :, :array.size(1)] = array
+            conv_feats.append(array_conv)
+        labels[i] = label
+
+    return transformer_data, conv_feats, transformer_max_array_length, labels
+
+
+
+def pad_collate_vq_pad_conv(batch:List[Tuple[Tensor, int]]): # <- no use
     # batch : [batch, [transformer_features, conv_features, label]]
 
     batch_size = len(batch)

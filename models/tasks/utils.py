@@ -30,6 +30,85 @@ def _shrink(x_tr, x_conv, equality="exact"):
     """
     This function operates in the following sequence:
 
+    1. Calculate weight based on restored feature
+    2. Multiply weight to transformer feature
+
+    Args:
+        x_tr : 
+            - Transformer layer feature
+            - shape: [BATCH, 2, TIME FRAME, DIM]
+        x_conv : List[conv_1, conv_2, ..., conv_batchsize]
+            - Convolution layer feature, 
+            - The length of the included convolutional feature varies
+    Returns:
+        x: weighted transformer feature       
+    """
+    def _exact(l, r):
+        return (l[0].item() == r[0].item()) & (l[1].item() == r[1].item())
+
+    def _partial(l, r):
+        return (l[0].item() == r[0].item()) | (l[1].item() == r[1].item())
+    
+    BATCH, _, TIME_FRAME, DIM = x_tr.shape
+    
+
+    # ===================================
+    # 1. calculate weights
+    # ===================================
+    equality_func = {"exact": _exact, "partial": _partial}[equality]
+
+    weights = torch.zeros([BATCH, TIME_FRAME], dtype = torch.float32).to(x_tr.device) # [BATCH, TIME FRAME]
+
+    for idx_batch, conv_feat in enumerate(x_conv): # idx_batch, [TIME FRAME, 2] in [BATCH, TIME FRAME, 2]
+        i = 0
+        time_dim = conv_feat[0].shape[0]
+        weight = []
+        cluster_count = 0
+
+        while i < time_dim:
+            cluster_size = 1
+
+            while (i + cluster_size) < time_dim:
+                is_eq = equality_func(conv_feat[0][i], conv_feat[0][i + cluster_size])
+                if is_eq:
+                    cluster_size += 1
+                else:
+                    break
+
+            weight += [1 / cluster_size] * cluster_size
+            i += cluster_size
+            cluster_count += 1
+
+        assert len(weight) == time_dim, "check time frame of conv_feat"
+
+        weight = torch.FloatTensor(weight) / cluster_count # len(weight) : TIME FRAME
+        weight = nn.functional.normalize(weight, dim = 0)
+
+        weights[idx_batch,:time_dim] = weight # weights : [BATCH, TIME FRAME]
+
+    # ⚡ print(weights) <- debugging point
+
+    # ===================================
+    # 4. Multiply weight to transformer feature
+    # ===================================
+
+    weights = weights.unsqueeze(dim = 1)  # [BATCH, 1, TIME FRAME]
+    weights = weights.unsqueeze(dim = 3) # [BATCH, 1, TIME FRAME, 1]
+    
+
+    x = x_tr * weights # [BATCH, 2, TIME FRAME, DIM] * [BATCH, 1, TIME FRAME, 1] ⚡ <- debugging point
+
+
+    return x
+
+
+
+
+
+def _shrink_restore(x_tr, x_conv, equality="exact"): # <- no use
+    """
+    This function operates in the following sequence:
+
     1. Find padded token index
     2. Restore padded feature
     3. Calculate weight based on restored feature
