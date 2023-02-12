@@ -18,7 +18,8 @@ DATA_LIST = [
     "speechcommands",
     "voxceleb",
     "iemocap",
-    'fluent'
+    'fluent',
+    '_fluent'
 ]
 
 
@@ -307,19 +308,16 @@ class IEMOCAPDataset(IEMOCAP):
 class FluentSpeechCommandsDataset(torch.utils.data.Dataset):
 
     SAMPLE_RATE = 16000
-    COMMANDS = [
-        ('activate', 'lamp', 'none'), ('activate', 'lights', 'bedroom'), ('activate', 'lights', 'kitchen'), 
-        ('activate', 'lights', 'none'), ('activate', 'lights', 'washroom'), ('activate', 'music', 'none'), 
-        ('bring', 'juice', 'none'), ('bring', 'newspaper', 'none'), ('bring', 'shoes', 'none'), ('bring', 'socks', 'none'), 
-        ('change language', 'Chinese', 'none'), ('change language', 'English', 'none'), ('change language', 'German', 'none'),
-         ('change language', 'Korean', 'none'), ('change language', 'none', 'none'), ('deactivate', 'lamp', 'none'), 
-         ('deactivate', 'lights', 'bedroom'), ('deactivate', 'lights', 'kitchen'), ('deactivate', 'lights', 'none'), 
-         ('deactivate', 'lights', 'washroom'), ('deactivate', 'music', 'none'), ('decrease', 'heat', 'bedroom'), 
-         ('decrease', 'heat', 'kitchen'), ('decrease', 'heat', 'none'), ('decrease', 'heat', 'washroom'), 
-         ('decrease', 'volume', 'none'), ('increase', 'heat', 'bedroom'), ('increase', 'heat', 'kitchen'), 
-         ('increase', 'heat', 'none'), ('increase', 'heat', 'washroom'), ('increase', 'volume', 'none')]
-
-    COMMAND_DICT = {key:i for i, key in enumerate(COMMANDS)}
+    
+    Action=['activate', 'bring', 'change language', 'deactivate', 'decrease', 'increase']
+    Object_=['lamp', 'lights', 'newspaper', 'juice', 'shoes', 'socks', 'music', 
+            'Chinese', 'Korean', 'English', 'German', 'none', 'heat', 'volume']
+    Location=['none','bedroom','kitchen','washroom']
+    slot2label = dict(
+        action={key:i for i,key in enumerate(Action)},
+        obj={key:i for i,key in enumerate(Object_)},
+        location={key:i for i,key in enumerate(Location)}
+    )
 
     def __init__(
         self,
@@ -352,17 +350,23 @@ class FluentSpeechCommandsDataset(torch.utils.data.Dataset):
     def __len__(self) -> int:
         return len(self.data)
 
-    def __getitem__(self, n: int) -> Tuple[Tensor, int]:
+    def __getitem__(self, n: int) -> Tuple[Tensor, Tensor]:
         if self.ext == 'pt':
             metadata= self.get_metadata(n)
             action, obj, location = metadata[-3:]
-            label = self.COMMAND_DICT[(action, obj, location)]
+            label = self.get_label(action, obj, location)
             data = torch.load(self._path + "/" + metadata[0], map_location='cpu')
             return data, label
         else:
             metadata = self.get_metadata(n)
             waveform = _load_waveform(self._path, metadata[0], metadata[1])
             return (waveform,) + (metadata[1],)
+
+    def get_label(self, action, obj, location):
+        return torch.tensor([
+            self.slot2label['action'][action], 
+            self.slot2label['obj'][obj], 
+            self.slot2label['location'][location]])
             
     def get_metadata(self, n: int) -> Tuple[str, int, str, int, str, str, str, str]:
         """Get metadata for the n-th sample from the dataset. Returns filepath instead of waveform,
@@ -430,6 +434,36 @@ class FluentSpeechCommandsDataset(torch.utils.data.Dataset):
         else:
             return subset
 
+
+class _FluentSpeechCommandsDataset(FluentSpeechCommandsDataset):
+
+    SAMPLE_RATE = 16000
+    COMMANDS = [
+        ('activate', 'lamp', 'none'), ('activate', 'lights', 'bedroom'), ('activate', 'lights', 'kitchen'), 
+        ('activate', 'lights', 'none'), ('activate', 'lights', 'washroom'), ('activate', 'music', 'none'), 
+        ('bring', 'juice', 'none'), ('bring', 'newspaper', 'none'), ('bring', 'shoes', 'none'), ('bring', 'socks', 'none'), 
+        ('change language', 'Chinese', 'none'), ('change language', 'English', 'none'), ('change language', 'German', 'none'),
+         ('change language', 'Korean', 'none'), ('change language', 'none', 'none'), ('deactivate', 'lamp', 'none'), 
+         ('deactivate', 'lights', 'bedroom'), ('deactivate', 'lights', 'kitchen'), ('deactivate', 'lights', 'none'), 
+         ('deactivate', 'lights', 'washroom'), ('deactivate', 'music', 'none'), ('decrease', 'heat', 'bedroom'), 
+         ('decrease', 'heat', 'kitchen'), ('decrease', 'heat', 'none'), ('decrease', 'heat', 'washroom'), 
+         ('decrease', 'volume', 'none'), ('increase', 'heat', 'bedroom'), ('increase', 'heat', 'kitchen'), 
+         ('increase', 'heat', 'none'), ('increase', 'heat', 'washroom'), ('increase', 'volume', 'none')]
+
+    COMMAND_DICT = {key:i for i, key in enumerate(COMMANDS)}
+
+    def __getitem__(self, n: int) -> Tuple[Tensor, int]:
+        if self.ext == 'pt':
+            metadata= self.get_metadata(n)
+            action, obj, location = metadata[-3:]
+            label = self.COMMAND_DICT[(action, obj, location)]
+            data = torch.load(self._path + "/" + metadata[0], map_location='cpu')
+            return data, label
+        else:
+            metadata = self.get_metadata(n)
+            waveform = _load_waveform(self._path, metadata[0], metadata[1])
+            return (waveform,) + (metadata[1],)
+            
 
 def _load_waveform(
     root: str,
