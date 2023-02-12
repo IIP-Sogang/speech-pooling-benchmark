@@ -1,5 +1,6 @@
 import pytorch_lightning as pl
 import torch
+from models.tasks.utils import vector_quantizer
 
 
 def acc_step(y_hat, y):
@@ -69,7 +70,7 @@ MetricFuncs = dict(
 
 
 class SpeechModel(pl.LightningModule):
-    def __init__(self, model, loss_function, optimizer, scheduler, metric='acc', **kwargs):
+    def __init__(self, model, loss_function, optimizer, scheduler, metric='acc', method = 'conv_feature', **kwargs):
         super().__init__()
         # ⚡ model
         self.model = model
@@ -93,10 +94,18 @@ class SpeechModel(pl.LightningModule):
 
         # custom
         self.metric = metric
+        self.method = method # 'conv_feature' or 'transformer_feature' or 'wav'
 
 
     def training_step(self, batch, batch_idx):
-        x, x_length, y = batch
+
+        if self.method == 'conv_feature':
+            x_tr, x_conv, x_length, y = batch
+            # ⚡ ⚡ ⚡ Vector quantization ⚡ ⚡ ⚡
+            x = vector_quantizer(x_tr, x_conv)
+
+        else:
+            x, x_length, y = batch
         # preprocess
         
         # inference
@@ -113,7 +122,14 @@ class SpeechModel(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         # this is the test loop
-        x, x_length, y = batch
+        if self.method == 'conv_feature':
+            x_tr, x_conv, x_length, y = batch
+            # ⚡ ⚡ ⚡ Vector quantization ⚡ ⚡ ⚡
+            x = vector_quantizer(x_tr, x_conv)
+
+        else:
+            x, x_length, y = batch
+
         y_hat = self.model(x, x_length)
         loss_function = test_loss_switch(self.loss_function, self.metric)
         loss = loss_function(y_hat, y)
@@ -127,7 +143,13 @@ class SpeechModel(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         # this is the validation loop
-        x, x_length, y = batch
+        if self.method == 'conv_feature':
+            x_tr, x_conv, x_length, y = batch
+            # ⚡ ⚡ ⚡ Vector quantization ⚡ ⚡ ⚡
+            x = vector_quantizer(x_tr, x_conv)
+        else:
+            x, x_length, y = batch
+            
         y_hat = self.model(x, x_length)
         loss_function = test_loss_switch(self.loss_function, self.metric)
         loss = loss_function(y_hat, y)

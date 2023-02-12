@@ -35,33 +35,35 @@ class SpeechCommandDataset(torchaudio.datasets.SPEECHCOMMANDS):
     CLASS_DICT = {class_:i for i, class_ in enumerate(CLASS_LIST)}
     CLASS_DICT_INV = {value:key for key, value in CLASS_DICT.items()}
 
-    def __init__(self, root:str='data', folder_in_archive='SpeechCommands', url='speech_commands_v0.02', subset:str='training', ext:str='wav', download=False):
+    def __init__(self, root:str='data', folder_in_archive='SpeechCommands', url='speech_commands_v0.02', subset:str='training', method:str='wav', download=False):
         super().__init__(subset=subset, root=root, folder_in_archive=folder_in_archive, url=url, download=download)
         assert subset in ['training','validation','testing']
         assert os.path.exists(root+'/'+folder_in_archive)
 
         self.folder_in_archive = folder_in_archive
-        self.ext = ext
+        self.method = method
 
         if subset == "validation": pass
         elif subset == "testing": pass
         elif subset == "training":
             excludes = set(_load_list(self._path, "validation_list.txt", "testing_list.txt"))
-            walker = sorted(str(p) for p in Path(self._path).glob(f"*/*.{self.ext}"))
+            walker = sorted(str(p) for p in Path(self._path).glob(f"*/*.{self.method}"))
             self._walker = [
                 w
                 for w in walker
                 if HASH_DIVIDER in w and EXCEPT_FOLDER not in w and os.path.normpath(w) not in excludes
             ]
         else:
-            walker = sorted(str(p) for p in Path(self._path).glob(f"*/*.{self.ext}"))
+            walker = sorted(str(p) for p in Path(self._path).glob(f"*/*.{self.method}"))
             self._walker = [w for w in walker if HASH_DIVIDER in w and EXCEPT_FOLDER not in w]
         
     def __getitem__(self, n: int) -> Tuple[Tensor, int]:
-        if self.ext == 'pt':
+        if self.method == 'transformer_feature':
             pt_path = self.get_metadata(n)
+            print(pt_path)
             label:str = os.path.basename(os.path.dirname(pt_path))
             label:int = self.label2index(label)
+            print(label)
             return (torch.load(pt_path, map_location='cpu'), label)
         else:
             return super().__getitem__(n)[:2] #Tuple[Tensor, int, str, str, int]
@@ -103,12 +105,12 @@ class VoxCelebDataset(VoxCeleb1Identification):
                            "id10271", "id10273", "id10275", "id10277", "id10279", "id10281", "id10283", "id10285", "id10287", "id10289", 
                            "id10291", "id10293", "id10295", "id10297", "id10299", "id10301", "id10303", "id10305", "id10307", "id10309"]
 
-    def __init__(self, root:str='data', subset:str='training', url:str='vrfy_split.txt', ext:str='pt', download=False, **kwargs):
+    def __init__(self, root:str='data', subset:str='training', url:str='vrfy_split.txt', method:str='transformer_feature', download=False, **kwargs):
         assert subset in ['training','validation','testing']
         assert os.path.exists(root)
         subset = map_subset_voxceleb(subset)
         super().__init__(root=root, subset=subset, meta_url=url, download=download)
-        self._ext_audio = '.'+ext
+        self._method_audio = '.'+method
         self.root = root
         self.id2class = self._map_spk_id()
 
@@ -123,7 +125,7 @@ class VoxCelebDataset(VoxCeleb1Identification):
         return new_path
 
     def __getitem__(self, n: int) -> Tuple[Tensor, int]:
-        if self._ext_audio == '.wav':
+        if self._method_audio == '.wav':
             return super().__getitem__(n)[:2]
         else:
             metadata = self.get_metadata(n)
@@ -143,12 +145,12 @@ class VoxCelebDataset(VoxCeleb1Identification):
 
 
 class VoxCelebVerificationDataset(VoxCeleb1Verification):
-    def __init__(self, root:str='data', subset:str='training', url:str='test_metadata.txt', ext:str='pt', download=False, **kwargs):
+    def __init__(self, root:str='data', subset:str='training', url:str='test_metadata.txt', method:str='transformer_feature', download=False, **kwargs):
         assert subset in ['training','validation','testing']
         assert os.path.exists(root)
         subset = map_subset_voxceleb(subset)
         super().__init__(root=root, meta_url=url, download=download)
-        self._ext_audio = '.'+ext
+        self._method_audio = '.'+method
         self.root = root
         
     def __getitem__(self, n: int) -> Tuple[Tensor, Tensor, int, int, str, str]:
@@ -173,12 +175,12 @@ class VoxCelebVerificationDataset(VoxCeleb1Verification):
             str:
                 File ID of speaker 2
         """
-        if self._ext_audio == '.pt':
+        if self._method_audio == '.transformer_feature':
             metadata = self.get_metadata(n)
             waveform_spk1 = torch.load(os.path.join(self._path, metadata[0]))
             waveform_spk2 = torch.load(os.path.join(self._path, metadata[1]))
             return (waveform_spk1, waveform_spk2) + (metadata[3],) # label
-        elif self._ext_audio == '.wav':
+        elif self._method_audio == '.wav':
             return self.__getitem__(n)
 
 
@@ -211,15 +213,16 @@ class IEMOCAPDataset(IEMOCAP):
         root: Union[str, Path],
         sessions: Tuple[str] = (1, 2, 3, 4, 5),
         utterance_type: Optional[str] = None,
-        ext:str='wav',
+        method:str='wav',
         feature_path_tag:str='_feat_1_12',
         final_classes: Tuple[str] = ("neu", "hap", "ang", "sad"),
         **kwargs,
     ):
         root = Path(root)
         self._path = root / "IEMOCAP"
-        self.ext = ext
+        self.method = method
         self.feature_path_tag = feature_path_tag
+        print(self.method, 'self.method')
 
         if not os.path.isdir(self._path):
             raise RuntimeError("Dataset not found.")
@@ -277,13 +280,25 @@ class IEMOCAPDataset(IEMOCAP):
                     self.mapping[wav_stem]["path"] = wav_path
 
     def __getitem__(self, n: int) -> Tuple[Tensor, int]:
-        if self.ext == 'pt':
+        if self.method == 'transformer_feature':
             new_root = str(self._path)
-            pt_path = self.generate_feature_path(n, new_root = new_root, tag = self.feature_path_tag)
+            transformer_feature_path = self.generate_feature_path(n, new_root = new_root, tag = self.feature_path_tag)
             wav_path, sr, wav_stem, label, speaker = self.get_metadata(n)
             emo_label = self.label2index(label)
 
-            return (torch.load(pt_path, map_location='cpu'), emo_label)
+            return (torch.load(transformer_feature_path, map_location='cpu'), emo_label)
+        
+        elif self.method == 'conv_feature':
+            new_root = str(self._path)
+            conv_feature_path = self.generate_feature_path(n, new_root = new_root, tag = self.feature_path_tag)
+
+            transformer_feature_path = self.generate_feature_path(n, new_root = new_root, tag = '_feat_1_12')
+            wav_path, sr, wav_stem, label, speaker = self.get_metadata(n)
+            emo_label = self.label2index(label)
+
+            return (torch.load(transformer_feature_path, map_location='cpu'), torch.load(conv_feature_path, map_location='cpu'), emo_label)
+
+
         else:
             return super().__getitem__(n)[:2] #Tuple[Tensor, int, str, str, int]
         
@@ -305,7 +320,7 @@ class IEMOCAPDataset(IEMOCAP):
         return self.CLASS_DICT_INV[index]
         
         
-class FluentSpeechCommandsDataset(torch.utils.data.Dataset):
+class _FluentSpeechCommandsDataset(torch.utils.data.Dataset):
 
     SAMPLE_RATE = 16000
     
@@ -323,7 +338,7 @@ class FluentSpeechCommandsDataset(torch.utils.data.Dataset):
         self,
         root: Union[str, Path] = 'fluent_speech_commands',
         subset: str = "train",
-        ext:str='wav',               
+        method:str='wav',               
         **kwargs
     ):
         subset = self.map_subset(subset)
@@ -345,13 +360,13 @@ class FluentSpeechCommandsDataset(torch.utils.data.Dataset):
         self.header = data[0]
         self.data = data[1:]
 
-        self.ext = ext
+        self.method = method
     
     def __len__(self) -> int:
         return len(self.data)
 
-    def __getitem__(self, n: int) -> Tuple[Tensor, Tensor]:
-        if self.ext == 'pt':
+    def __getitem__(self, n: int) -> Tuple[Tensor, int]:
+        if self.method == 'transformer_feature':
             metadata= self.get_metadata(n)
             action, obj, location = metadata[-3:]
             label = self.get_label(action, obj, location)
@@ -400,7 +415,7 @@ class FluentSpeechCommandsDataset(torch.utils.data.Dataset):
         file_name = sample[self.header.index("path")].split("/")[-1]
         file_name = file_name.split(".")[0]
         speaker_id, transcription, action, obj, location = sample[2:]
-        file_path = os.path.join("wavs", "speakers", speaker_id, f"{file_name}.{self.ext}")
+        file_path = os.path.join("wavs", "speakers", speaker_id, f"{file_name}.{self.method}")
 
         return file_path, self.SAMPLE_RATE, file_name, speaker_id, transcription, action, obj, location
 
@@ -435,7 +450,7 @@ class FluentSpeechCommandsDataset(torch.utils.data.Dataset):
             return subset
 
 
-class _FluentSpeechCommandsDataset(FluentSpeechCommandsDataset):
+class FluentSpeechCommandsDataset(_FluentSpeechCommandsDataset):
 
     SAMPLE_RATE = 16000
     COMMANDS = [
@@ -453,7 +468,7 @@ class _FluentSpeechCommandsDataset(FluentSpeechCommandsDataset):
     COMMAND_DICT = {key:i for i, key in enumerate(COMMANDS)}
 
     def __getitem__(self, n: int) -> Tuple[Tensor, int]:
-        if self.ext == 'pt':
+        if self.method == 'transformer_feature':
             metadata= self.get_metadata(n)
             action, obj, location = metadata[-3:]
             label = self.COMMAND_DICT[(action, obj, location)]
