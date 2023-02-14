@@ -104,6 +104,37 @@ class SelfAttentivePooling(nn.Module):
         Input feature size should follow (Batch size, n_layers, Length, Dimension)
         Return speech representation which follows (Batch size, Dimension)
         """
+        import pdb;pdb.set_trace()
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
+
+        batch_size, feat_len, _ = input_feature.shape # (Batch size, Length, Dimension)
+
+        h = torch.tanh(self.sap_linear(input_feature)) # (Batch size, Length, Dimension)
+        w = torch.matmul(h, self.attention).squeeze(dim=2) # (Batch size, Length)
+        w = F.softmax(w, dim=1).view(batch_size, feat_len, 1) # 
+        feature = torch.sum(input_feature * w, dim=1) 
+
+        return feature
+
+class SelfAttentiveMaskingPooling(nn.Module):
+    def __init__(self, input_dim:int = 768):
+        super().__init__()
+
+        self.sap_linear = nn.Linear(input_dim, input_dim)
+        self.attention = self.new_parameter(input_dim, 1)
+
+    def new_parameter(self, *size):
+        out = nn.Parameter(torch.FloatTensor(*size))
+        nn.init.xavier_normal_(out)
+        return out
+
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        import pdb;pdb.set_trace()
         assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
         input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
 
@@ -113,7 +144,7 @@ class SelfAttentivePooling(nn.Module):
         w = torch.matmul(h, self.attention).squeeze(dim=2) # (Batch size, Length)
 
         # If length = 2, mask = [[1, 1, 0, 0, 0, ...]]
-        mask = torch.arange(feat_len)[None, :].to(w.device) < input_lengths
+        mask = torch.arange(feat_len).expand(batch_size, feat_len).to(w.device) < input_lengths
         w = w + (~mask) * (w.min() - 20)
 
         w = F.softmax(w, dim=1).view(batch_size, feat_len, 1) # 
