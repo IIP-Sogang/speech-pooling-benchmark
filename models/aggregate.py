@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 class AvgPool(nn.Module):
     
-    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args):
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args, **kwargs):
         """
         Input feature size should follow (Batch size, n_layers, Length, Dimension)
         Return speech representation which follows (Batch size, Dimension)
@@ -24,17 +24,14 @@ class SimpleAvgPool(nn.Module):
     This class utilizes only the last layer of 12-layered features.
     """
 
-    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args):
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args, **kwargs):
         """
         Input feature size should follow (Batch size, n_layers, Length, Dimension)
         Return speech representation which follows (Batch size, Dimension)
         """
-        from time import time
-        start = time()
         assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
         input_feature = input_feature[:,-1:]
         outputs = AvgPool()(input_feature, input_lengths)
-        print(f"Time ellapsed for {outputs.size(0)} items : {time() - start}")
         return outputs[:,0]
 
 
@@ -54,7 +51,6 @@ class VQWeightedAvgPool(nn.Module):
         """
         from itertools import groupby
         assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
-
         input_feature = input_feature[:,-1:] # Select last layer only
         B, N, L, D = input_feature.shape
 
@@ -83,6 +79,10 @@ class VQWeightedAvgPool(nn.Module):
         # Refer to https://docs.python.org/3/library/itertools.html#itertools.groupby
         if self._eq_key=='exact':
             return tuple(x)
+        elif self._eq_key=='former':
+            return x[0]
+        elif self._eq_key=='later':
+            return x[-1]
         else:
             Exception
 

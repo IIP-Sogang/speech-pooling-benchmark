@@ -27,7 +27,7 @@ test_dataset_config:
 test_loader_config:
   shuffle: False
 
-batch_size: 512
+batch_size: 128
 num_workers: 8
 
 task_config:
