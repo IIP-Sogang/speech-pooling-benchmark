@@ -43,7 +43,7 @@ class SpeechCommandDataset(torchaudio.datasets.SPEECHCOMMANDS):
         self.folder_in_archive = folder_in_archive
         self.ext = ext
 
-        self._vq_path = os.path.join(root, vq_folder)
+        self._vq_path = os.path.join(root, vq_folder, url)
 
         if subset == "validation": pass
         elif subset == "testing": pass
@@ -89,6 +89,10 @@ class SpeechCommandDataset(torchaudio.datasets.SPEECHCOMMANDS):
             os.makedirs(os.path.dirname(new_path))
 
         return new_path
+
+    @property
+    def return_vq(self):
+        return self._vq_path is not None
 
 
 # Speaker Verification
@@ -152,6 +156,10 @@ class VoxCelebDataset(VoxCeleb1Identification):
         print(f"TOTAL {len(spks)} SPEAKERS ARE FOUND")
         return {spk_id:i for i, spk_id in enumerate(spks)}
 
+    @property
+    def return_vq(self):
+        return self._vq_path is not None
+
 
 class VoxCelebVerificationDataset(VoxCeleb1Verification):
     def __init__(self, root:str='data', vq_root:str=None, subset:str='training', url:str='test_metadata.txt', ext:str='pt', download=False, **kwargs):
@@ -199,6 +207,10 @@ class VoxCelebVerificationDataset(VoxCeleb1Verification):
 
         elif self._ext_audio == '.wav':
             return self.__getitem__(n)
+
+    @property
+    def return_vq(self):
+        return self._vq_path is not None
 
 
 def _load_list(root, *filenames):
@@ -327,6 +339,7 @@ class IEMOCAPDataset(IEMOCAP):
     def index2label(self, index):
         return self.CLASS_DICT_INV[index]
 
+    @property
     def return_vq(self):
         return self.vq_path_tag is not None
         
@@ -465,8 +478,9 @@ class _FluentSpeechCommandsDataset(torch.utils.data.Dataset):
         else:
             return subset
 
+    @property
     def return_vq(self):
-        return self.vq_root is not None
+        return self._vq_path is not None
 
 
 class FluentSpeechCommandsDataset(_FluentSpeechCommandsDataset):

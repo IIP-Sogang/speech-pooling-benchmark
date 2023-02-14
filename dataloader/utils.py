@@ -39,7 +39,7 @@ def load_dataset(data_name:str='speechcommands', get_collate_fn:bool=False, **kw
         else:
             dataset = VoxCelebVerificationDataset(**kwargs)
             if dataset.return_vq:
-                raise NotImplementedError
+                return pad_double_collate_vq
             else:
                 collate_fn = pad_double_collate
 
@@ -169,7 +169,7 @@ def pad_double_collate(batch:List[Tuple[Tensor, Tensor, int]]):
 
     return data, data_lengths, labels
 
-def pad_collate_vq(batch:List[Tuple[Tensor, Tensor, int]]):
+def pad_collate_vq(batch:List[Tuple[Tensor, int, Tensor]]):
     batch_size = len(batch)
     batch_sample = batch[0][0] # [2, 127, 768]
     batch_dim = len(batch_sample.shape) # 3 (@ using transformer feature)
@@ -193,6 +193,45 @@ def pad_collate_vq(batch:List[Tuple[Tensor, Tensor, int]]):
         else:
             data[i, :, :array.size(1)] = array
         vq_index[i, :vq_array.size(0)] = vq_array
+        labels[i] = label
+
+    return data, data_lengths, vq_index, labels
+
+
+def pad_double_collate_vq(batch:List[Tuple[Tensor, Tensor, int, Tensor, Tensor]]):
+    """
+    Return
+    data : Tensor (2, batch size, length) or (2, batch size, dimension, length)
+    data_lengths : Tensor (2, batch size) or (2, batch size)
+    labels : Tensor (batch size, )
+    """
+    batch_size = len(batch)
+    batch_sample = batch[0][0]
+    batch_dim = len(batch_sample.shape)
+    
+    max_array_length = 0
+
+    search_dim = 0 if batch_dim == 2 else 1
+    data_lengths = torch.zeros((2, batch_size,), dtype=torch.long)
+    for i, (array1, array2, _) in enumerate(batch):
+        for j, array in enumerate([array1, array2]):
+            data_lengths[j][i] = array.size(search_dim)
+    max_array_length = data_lengths.max()
+
+    data = torch.zeros((2, batch_size, max_array_length, batch_sample.size(-1))) if batch_dim == 2 \
+           else torch.zeros((2, batch_size, batch_sample.size(0), max_array_length, batch_sample.size(-1)))
+    vq_index = torch.zeros((2, batch_size, max_array_length, 2))
+    labels = torch.zeros((batch_size, ), dtype=torch.long)
+    
+    for i, (array1, array2, label, vq_array1, vq_array2) in enumerate(batch):
+        if batch_dim == 2:
+            data[0, i, :len(array1)] = array1
+            data[1, i, :len(array2)] = array2
+        else:
+            data[0, i, :, :array1.size(1)] = array1
+            data[1, i, :, :array2.size(1)] = array2
+        vq_index[0, i, :vq_array1.size(0)] = vq_array1
+        vq_index[1, i, :vq_array2.size(0)] = vq_array2
         labels[i] = label
 
     return data, data_lengths, vq_index, labels

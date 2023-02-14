@@ -2,6 +2,7 @@
 training_dataset_config:
   data_name: 'voxceleb'
   root: 'data/voxceleb1_1_12'
+  vq_root: 'data/voxceleb1_vq'
   subset: 'training'
   url: 'vrfy_split.txt'
   ext: 'pt'
@@ -10,13 +11,14 @@ train_loader_config:
 test_dataset_config:
   data_name: 'voxceleb'
   root: 'data/voxceleb1_1_12'
+  vq_root: 'data/voxceleb1_vq'
   subset: 'validation'
   url: 'valid_metadata.txt'
   ext: 'pt'
 test_loader_config:
   shuffle: False
 
-batch_size: 32
+batch_size: 512
 num_workers: 8
 
 task_config:
@@ -35,7 +37,7 @@ loss: amsoftmax
 
 
 # 4. Scheduler
-scheduler: steplr
+scheduler: none
 scheduler_config:
   step_size: 50
   gamma: 0.9
@@ -43,6 +45,7 @@ scheduler_config:
 
 
 # 5. Trainer
+max_epoch: 50
 devices: -1
 accelerator: cuda
 num_sanity_val_steps: 2
