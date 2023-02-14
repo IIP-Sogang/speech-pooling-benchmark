@@ -8,9 +8,18 @@ training_dataset_config:
   ext: 'pt'
 train_loader_config:
   shuffle: True
-test_dataset_config:
+validation_dataset_config:
   root: 'data'
   subset: 'validation'
+  folder_in_archive: 'SpeechCommands_1_12'
+  vq_folder: 'SpeechCommands_vq'
+  url: 'speech_commands_v0.02'
+  ext: 'pt'
+validation_loader_config:
+  shuffle: False
+test_dataset_config:
+  root: 'data'
+  subset: 'testing'
   folder_in_archive: 'SpeechCommands_1_12'
   vq_folder: 'SpeechCommands_vq'
   url: 'speech_commands_v0.02'

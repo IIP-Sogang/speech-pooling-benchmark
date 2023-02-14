@@ -26,6 +26,9 @@ def train(config):
     # ⚡⚡ 1. Set 'Dataset', 'DataLoader'  
     from dataloader.utils import load_dataset
     training_dataset, train_collate_fn = load_dataset(**config['training_dataset_config'], get_collate_fn=True)
+    if config.get('validation_dataset_config', False):
+        config['test_loader_config'] = config['validation_loader_config']
+        config['test_dataset_config'] = config['validation_dataset_config']
     test_dataset, test_collate_fn = load_dataset(**config['test_dataset_config'], get_collate_fn=True)
 
     train_dataloader = DataLoader(
@@ -78,7 +81,7 @@ def train(config):
         print("Warning : Tensorboard is not available, CSV logger will be used.")
 
     # ⚡⚡ Profiler
-    profiler = PROFILERS[config['profiler']](dirpath=config['default_root_dir'], filename='profile_report') if config['profiler'] else None
+    profiler = PROFILERS[config['profiler']](dirpath=config['default_root_dir'], filename='profile_report') if config.get('profiler',None) else None
 
     # ⚡⚡ 5. LightningModule
     trainer = pl.Trainer(
@@ -121,13 +124,13 @@ def test():
             dataset = test_dataset,
             batch_size=config['batch_size'],
             num_workers=config['num_workers'],
-            pin_memory=True,
+            pin_memory=False,
             collate_fn=collate_fn,
             **config.get('test_loader_config',{})
         )
 
     # ⚡⚡ 2. Set 'Model', 'Loss', 'Optimizer', 'Scheduler'
-    model = importlib.import_module('models.head').__getattribute__(config['model'])
+    model = importlib.import_module('models.tasks').__getattribute__(config['model'])
     model =  model(**config['model_config'])
 
     optimizer = importlib.import_module("optimizer." + config['optimizer']).__getattribute__("Optimizer")

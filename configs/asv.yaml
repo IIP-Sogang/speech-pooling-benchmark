@@ -8,11 +8,20 @@ training_dataset_config:
   ext: 'pt'
 train_loader_config:
   shuffle: True
-test_dataset_config:
+validation_dataset_config:
   data_name: 'voxceleb'
   root: 'data/voxceleb1_1_12'
   vq_root: 'data/voxceleb1_vq'
   subset: 'validation'
+  url: 'valid_metadata.txt'
+  ext: 'pt'
+validation_loader_config:
+  shuffle: False
+test_dataset_config:
+  data_name: 'voxceleb'
+  root: 'data/voxceleb1_1_12'
+  vq_root: 'data/voxceleb1_vq'
+  subset: 'testing'
   url: 'valid_metadata.txt'
   ext: 'pt'
 test_loader_config:

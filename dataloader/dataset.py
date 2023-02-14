@@ -316,7 +316,7 @@ class IEMOCAPDataset(IEMOCAP):
             wav_path, sr, wav_stem, label, speaker = self.get_metadata(n)
             emo_label = self.label2index(label)
             if self.vq_path_tag:
-                vq_index_path = self.generate_feature_path(n, new_root = new_root, tag = self.feature_path_tag)
+                vq_index_path = self.generate_feature_path(n, new_root = new_root, tag = self.vq_path_tag)
                 return (torch.load(pt_path, map_location='cpu'), emo_label, torch.load(vq_index_path, map_location='cpu'))
             else:
                 return (torch.load(pt_path, map_location='cpu'), emo_label)

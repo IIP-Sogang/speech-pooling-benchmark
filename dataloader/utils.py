@@ -39,7 +39,7 @@ def load_dataset(data_name:str='speechcommands', get_collate_fn:bool=False, **kw
         else:
             dataset = VoxCelebVerificationDataset(**kwargs)
             if dataset.return_vq:
-                return pad_double_collate_vq
+                collate_fn = pad_double_collate_vq
             else:
                 collate_fn = pad_double_collate
 
@@ -213,7 +213,7 @@ def pad_double_collate_vq(batch:List[Tuple[Tensor, Tensor, int, Tensor, Tensor]]
 
     search_dim = 0 if batch_dim == 2 else 1
     data_lengths = torch.zeros((2, batch_size,), dtype=torch.long)
-    for i, (array1, array2, _) in enumerate(batch):
+    for i, (array1, array2, _, _, _) in enumerate(batch):
         for j, array in enumerate([array1, array2]):
             data_lengths[j][i] = array.size(search_dim)
     max_array_length = data_lengths.max()
