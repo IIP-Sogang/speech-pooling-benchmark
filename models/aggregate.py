@@ -130,6 +130,52 @@ class VQWeightedAvgPool(nn.Module):
             Exception
 
 
+class VQSqueezedAvgPool(VQWeightedAvgPool):
+    """
+    Average by VQ indices.
+    """
+    def __init__(self) -> None:
+        super().__init__()
+    
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, vq_indices:Tensor):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        vq index size should follow (Batch size, Length, 2)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        from itertools import groupby
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1:] # Select last layer only
+        B, N, L, D = input_feature.shape
+        vq_indices = vq_indices.tolist() # This enormously accelarates the groupby calculation.
+        avg_weights = torch.zeros((B, 1, L, 1), device=input_feature.device)
+        outputs = torch.zeros((B, D), device=input_feature.device)
+        for i, (vq_indices_, input_length) in enumerate(zip(vq_indices, input_lengths)):
+            vq_indices_ = vq_indices_[:input_length]
+            sorted_indices = sorted(range(input_length), key=lambda x: tuple(vq_indices_[x]))
+            restore_indices = sorted(range(input_length), key=lambda x: sorted_indices[x])
+            vq_indices_ = sorted(vq_indices_)
+            lengths = torch.tensor(
+                [len(list(group)) for eq_value, group in groupby(vq_indices_, key=self.eq_key)]
+            ).to(input_feature.device)
+            # vq_indices_ = vq_indices_[sorted_indices]
+            # _, counts = vq_indices_.unique_consecutive(dim=0, return_counts=True)
+            # ex) vq_unq_counts = [1, 1, 3, 1] means there are 4 unique items, 
+            # and items from 3rd to 5th are equal (3 repeated items).
+            weightList = 1 / ( lengths.size(0) * lengths )
+            # ex) weightList = [0.25, 0.25, 0.08, 0.25]
+            # We reduce redundant items, utilizing unique items more
+            sorted_avg_weights = torch.repeat_interleave(weightList, lengths)[:,None]
+            restored_avg_weigths = sorted_avg_weights[restore_indices]
+            avg_weights[i,:,:input_length,:] = restored_avg_weigths
+            # ex) avg_weights[0, 0] = [0.25, 0.25, 0.08, 0.08, 0.08, 0.25, 0, 0, 0, 0]
+            # Match averaging weights to the input items
+        
+        outputs = (input_feature * avg_weights).sum(2) # Length dimension
+        outputs = outputs[:, -1, :] # Squeeze dimension
+        return outputs
+
+
 class _VQ_OR(object):
     def __init__(self, x, y):
         # VQ index (x,y)
@@ -138,6 +184,45 @@ class _VQ_OR(object):
 
     def __eq__(self, other):
         return self.x == other.x or self.y == other.y
+
+
+class ProbWeightedAvgPool(nn.Module):
+    """
+    Average by frequency.
+    """
+    def __init__(self, a=0.5, freq_path='models/freq.pt') -> None:
+        super().__init__()
+        freqs = torch.load(freq_path, map_location='cpu')
+        probs = freqs/freqs.sum()
+        self.weight = probs / (probs + a)
+    
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, vq_indices:Tensor):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        vq index size should follow (Batch size, Length, 2)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        from itertools import groupby
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1:] # Select last layer only
+        B, N, L, D = input_feature.shape
+
+        vq_indices = vq_indices.tolist() # This enormously accelarates the groupby calculation.
+        avg_weights = list()
+        # avg_weights = torch.zeros((B, L), device=input_feature.device)
+        
+        def get_prob_normalized_weight(index:Tuple):
+            index = tuple(map(int, index))
+            return self.weight[index[0], index[1]]
+
+        for i, (vq_indices_, input_length) in enumerate(zip(vq_indices, input_lengths)):
+            avg_weights.append(list(map(get_prob_normalized_weight, vq_indices_[:input_length])) + [0 for _ in range(len(vq_indices_) - input_length)])
+            # avg_weights[i, :input_length] = torch.tensor(list(map(get_prob_normalized_weight, vq_indices_[:input_length])), device=avg_weights.device)[:, None]
+        avg_weights = torch.tensor(avg_weights, device=input_feature.device).unsqueeze(1)[:, :, :, None]
+        
+        outputs = (input_feature * avg_weights).sum(2) # Length dimension
+        outputs = outputs[:, -1, :] # Squeeze dimension
+        return outputs    
 
 
 class SelfAttentivePooling(nn.Module):
@@ -184,7 +269,7 @@ class WhiteningBERT(nn.Module):
         self.layer_comb = LayerCombination(layer_ids=layer_ids)
         self.whitening = Whitening() if whitening else nn.Identity()
 
-    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args):
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args, **kwargs):
         """
         Input feature size should follow (Batch size, n_layers, Length, Dimension)
         Return speech representation which follows (Batch size, Dimension)
@@ -245,5 +330,9 @@ def select_method(head_type:str='avgpool', input_dim:int=768, layer_ids:Union[st
         return WhiteningBERT(layer_ids=layer_ids, whitening=kwargs['whitening'])
     elif head_type=='vq':
         return VQWeightedAvgPool(shrink=kwargs['shrink'])
+    elif head_type=='vq_squeeze':
+        return VQSqueezedAvgPool()
+    elif head_type=='prob':
+        return ProbWeightedAvgPool(a=kwargs.get('a'), freq_path=kwargs['freq_path'])
     else:
         assert False, f"""HEAD TYPE "{head_type}" IS NOT IMPLEMENTED!"""
