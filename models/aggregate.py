@@ -1,5 +1,6 @@
 from abc import *
 from typing import List, Optional, Tuple, Union
+from itertools import groupby
 
 import torch
 import torch.nn as nn
@@ -104,15 +105,14 @@ class SelfAttentivePooling(nn.Module):
         Input feature size should follow (Batch size, n_layers, Length, Dimension)
         Return speech representation which follows (Batch size, Dimension)
         """
-        import pdb;pdb.set_trace()
         assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
         input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
 
-        batch_size, feat_len, _ = input_feature.shape # (Batch size, Length, Dimension)
+        B, L, _ = input_feature.shape # (Batch size, Length, Dimension)
 
         h = torch.tanh(self.sap_linear(input_feature)) # (Batch size, Length, Dimension)
         w = torch.matmul(h, self.attention).squeeze(dim=2) # (Batch size, Length)
-        w = F.softmax(w, dim=1).view(batch_size, feat_len, 1) # 
+        w = F.softmax(w, dim=1).view(B, L, 1) # 
         feature = torch.sum(input_feature * w, dim=1) 
 
         return feature
@@ -134,23 +134,61 @@ class SelfAttentiveMaskingPooling(nn.Module):
         Input feature size should follow (Batch size, n_layers, Length, Dimension)
         Return speech representation which follows (Batch size, Dimension)
         """
-        import pdb;pdb.set_trace()
         assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
         input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
 
-        batch_size, feat_len, _ = input_feature.shape # (Batch size, Length, Dimension)
+        B, L, _ = input_feature.shape # (Batch size, Length, Dimension)
 
         h = torch.tanh(self.sap_linear(input_feature)) # (Batch size, Length, Dimension)
         w = torch.matmul(h, self.attention).squeeze(dim=2) # (Batch size, Length)
 
         # If length = 2, mask = [[1, 1, 0, 0, 0, ...]]
-        mask = torch.arange(feat_len).expand(batch_size, feat_len).to(w.device) < input_lengths
+        mask = torch.arange(L).expand(B, L).to(w.device) < input_lengths[:,None] # result : (Batch size, Length)
         w = w + (~mask) * (w.min() - 20)
 
-        w = F.softmax(w, dim=1).view(batch_size, feat_len, 1) # 
+        w = F.softmax(w, dim=1).view(B, L, 1) # 
         feature = torch.sum(input_feature * w, dim=1) 
 
         return feature
+    
+    
+class XVector(nn.Module):
+    def __init__(self, input_dim = 40, num_classes=8):
+        super(XVector, self).__init__()
+        from models.tasks.asv.tdnn import TDNN
+
+        self.tdnn1 = TDNN(input_dim=input_dim, output_dim=512, context_size=5, dilation=1,dropout_p=0.5)
+        self.tdnn2 = TDNN(input_dim=512, output_dim=512, context_size=3, dilation=1,dropout_p=0.5)
+        self.tdnn3 = TDNN(input_dim=512, output_dim=512, context_size=2, dilation=2,dropout_p=0.5)
+        self.tdnn4 = TDNN(input_dim=512, output_dim=512, context_size=1, dilation=1,dropout_p=0.5)
+        self.tdnn5 = TDNN(input_dim=512, output_dim=512, context_size=1, dilation=3,dropout_p=0.5)
+        #### Frame levelPooling
+        self.segment6 = nn.Linear(1024, 512)
+        self.segment7 = nn.Linear(512, 512)
+        self.output = nn.Linear(512, num_classes)
+
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args):
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        
+        import pdb; pdb.set_trace()
+        input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
+        
+        tdnn1_out = self.tdnn1(input_feature)
+        tdnn2_out = self.tdnn2(tdnn1_out)
+        tdnn3_out = self.tdnn3(tdnn2_out)
+        tdnn4_out = self.tdnn4(tdnn3_out)
+        tdnn5_out = self.tdnn5(tdnn4_out)
+
+        ### Stat Pool
+        mean = torch.mean(tdnn5_out,1)
+        std = torch.std(tdnn5_out,1)
+        stat_pooling = torch.cat((mean,std),1)
+        segment6_out = self.segment6(stat_pooling)
+        x_vec = self.segment7(segment6_out)
+
+        return x_vec
+
+
 
 
 class WhiteningBERT(nn.Module):
@@ -219,6 +257,11 @@ def select_method(head_type:str='avgpool', input_dim:int=768, layer_ids:Union[st
         return SimpleAvgPool()
     elif head_type=='sap':
         return SelfAttentivePooling(input_dim)
+    elif head_type=='x_vec':
+        print( kwargs)
+        return XVector(input_dim = input_dim, num_classes = 1211)
+    elif head_type=='sap_mask':
+        return SelfAttentiveMaskingPooling(input_dim)
     elif head_type=='white':
         return WhiteningBERT(layer_ids=layer_ids, whitening=kwargs['whitening'])
     elif head_type=='vq':
