@@ -25,3 +25,7 @@ class SimpleClassificationModule(TaskDependentModule):
         speech_representation = self.head(inputs, input_lengths, *args)
         outputs = self.linear(speech_representation)
         return outputs.max(-1)
+    
+    def extract(self, inputs, input_lengths, *args) -> Tensor:
+        speech_representation = self.head(inputs, input_lengths, *args)
+        return speech_representation

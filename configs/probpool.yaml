@@ -1,0 +1,4 @@
+  head_type: 'prob'
+  a: 0.5
+  freq_path: 'models/freq.pt'
+  layer_ids: 0 1
