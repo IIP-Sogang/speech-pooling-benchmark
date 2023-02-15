@@ -1,5 +1,5 @@
 from abc import *
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -73,6 +73,47 @@ class VQWeightedAvgPool(nn.Module):
         outputs = (input_feature * avg_weights).sum(2) # Length dimension
         outputs = outputs[:, -1, :] # Squeeze dimension
         return outputs
+    
+    def extract_stats(self, input_feature:Tensor, input_length:Tensor, vq_index:Tensor):# ->List[Dict[str,int], List[int], List[int]]:
+        """
+        Input feature size should follow (n_layers, Length, Dimension)
+        vq index size should follow (Length, 2)
+        Return (vq_representation, token dictionary, cluster lengths, token length)
+        """
+        from itertools import groupby
+        assert input_feature.dim() == 3, f"Input feature size is {input_feature.size()}, Should follows (Layer, Length, Dimension)"
+        input_feature = input_feature[-1:] # Select last layer only
+        N, L, D = input_feature.shape
+
+        token_dict = dict()
+        cluster_len = dict()
+
+        vq_index = vq_index.tolist() # This enormously accelarates the groupby calculation.
+        for vq_index_ in vq_index:
+            # === Count index number ===
+            token_dict[tuple(vq_index_)] = token_dict.get(tuple(vq_index_), 0) + 1
+
+        avg_weights = torch.zeros((1, L, 1), device=input_feature.device)
+        
+        length = torch.tensor(
+            [len(list(group)) for eq_value, group in groupby(vq_index[:input_length], key=self.eq_key)]
+        ).to(input_feature.device)
+        # ex) lengths = [1, 1, 3, 1] means there are 4 unique items, 
+        # and items from 3rd to 5th are equal (3 repeated items).
+        for len_ in length:
+            len_ = len_.item()
+            cluster_len[len_] = cluster_len.get(len_, 0) + 1
+
+        weightList = 1 / ( length.size(0) * length )
+        # ex) weightList = [0.25, 0.25, 0.08, 0.25]
+        # We reduce redundant items, utilizing unique items more
+        avg_weights[:, :input_length] = torch.repeat_interleave(weightList, length)[:,None]
+        # ex) avg_weights[0, 0] = [0.25, 0.25, 0.08, 0.08, 0.08, 0.25, 0, 0, 0, 0]
+        # Match averaging weights to the input items
+    
+        outputs = (input_feature * avg_weights).sum(1) # Length dimension
+        outputs = outputs[-1, :] # Squeeze dimension
+        return outputs, token_dict, cluster_len, input_length
 
     def eq_key(self, x):
         # You can define your own key, for different matching.
@@ -83,8 +124,20 @@ class VQWeightedAvgPool(nn.Module):
             return x[0]
         elif self._eq_key=='later':
             return x[-1]
+        elif self._eq_key=='or':
+            return _VQ_OR(*x)
         else:
             Exception
+
+
+class _VQ_OR(object):
+    def __init__(self, x, y):
+        # VQ index (x,y)
+        self.x = x
+        self.y = y
+
+    def __eq__(self, other):
+        return self.x == other.x or self.y == other.y
 
 
 class SelfAttentivePooling(nn.Module):
