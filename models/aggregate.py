@@ -39,9 +39,10 @@ class VQWeightedAvgPool(nn.Module):
     """
     Average by VQ indices.
     """
-    def __init__(self, shrink='exact') -> None:
+    def __init__(self, shrink='exact', margin=0) -> None:
         super().__init__()
         self._eq_key = shrink
+        self.margin = margin
     
     def forward(self, input_feature:Tensor, input_lengths:Tensor, vq_indices:Tensor):
         """
@@ -126,6 +127,8 @@ class VQWeightedAvgPool(nn.Module):
             return x[-1]
         elif self._eq_key=='or':
             return _VQ_OR(*x)
+        elif self._eq_key=='margin':
+            return _VQ_DIST(x, margin=self.margin)
         else:
             Exception
 
@@ -174,6 +177,20 @@ class VQSqueezedAvgPool(VQWeightedAvgPool):
         outputs = (input_feature * avg_weights).sum(2) # Length dimension
         outputs = outputs[:, -1, :] # Squeeze dimension
         return outputs
+
+
+def vq_distance(x:List[int,int], y:List[int,int]):
+    return int(x[0] != y[0]) + int(x[1] != y[1])
+
+
+class _VQ_DIST(object):
+    def __init__(self, values, margin=0):
+        # VQ index (values[0],values[1])
+        self.values = values
+        self.margin = margin
+
+    def __eq__(self, other):
+        return vq_distance(self.values, other.values) <= self.margin
 
 
 class _VQ_OR(object):
