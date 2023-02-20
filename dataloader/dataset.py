@@ -43,7 +43,8 @@ class SpeechCommandDataset(torchaudio.datasets.SPEECHCOMMANDS):
         self.folder_in_archive = folder_in_archive
         self.ext = ext
 
-        self._vq_path = os.path.join(root, vq_folder, url)
+        self._vq_path = os.path.join(root, vq_folder, url) if vq_folder is not None else None
+        # self._vq_path = os.path.join(root, vq_folder, url)
 
         if subset == "validation": pass
         elif subset == "testing": pass
@@ -245,7 +246,7 @@ class IEMOCAPDataset(IEMOCAP):
         ext:str='wav',
         feature_path_tag:str='_feat_1_12',
         vq_path_tag:str=None,
-        final_classes: Tuple[str] = ("neu", "hap", "ang", "sad"),
+        final_classes: Tuple[str] = ("neu", "hap", "ang", "sad", "exc"),
         **kwargs,
     ):
         root = Path(root)
@@ -298,10 +299,10 @@ class IEMOCAPDataset(IEMOCAP):
                         label = line[2] # 'neu'
                         if wav_stem not in all_data: 
                             continue
-                        if label not in final_classes: # ["neu", "hap", "ang", "sad", "exc", "fru"]
+                        if label not in final_classes: # ["neu", "hap", "ang", "sad", "exc"]
                             continue
                         self.mapping[wav_stem] = {}
-                        self.mapping[wav_stem]["label"] = label
+                        self.mapping[wav_stem]["label"] = label.replace('exc', 'hap') # 
 
             for wav_path in wav_paths:
                 wav_stem = str(Path(wav_path).stem)
