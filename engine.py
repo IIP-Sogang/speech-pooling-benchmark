@@ -47,9 +47,12 @@ def eer_calculate(step_outputs:dict, name:str='val'):
 def test_loss_switch(func, metric:str):
     # Switch loss function, only for evaluation
     from loss.cosine_emb import loss_function as cos_loss
+    from loss.slot_ce import loss_function as slot_loss
     
     if metric == "eer":
         return cos_loss
+    elif metric == 'slot_acc':
+        return slot_loss
     else:
         return func
 
@@ -70,7 +73,7 @@ MetricFuncs = dict(
 
 
 class SpeechModel(pl.LightningModule):
-    def __init__(self, model, loss_function, optimizer, scheduler, metric='acc', method = 'conv_feature', **kwargs):
+    def __init__(self, model, loss_function, optimizer, scheduler, metric='acc', **kwargs):
         super().__init__()
         # ⚡ model
         self.model = model
@@ -94,7 +97,6 @@ class SpeechModel(pl.LightningModule):
 
         # custom
         self.metric = metric
-        self.method = method # 'conv_feature' or 'transformer_feature' or 'wav'
 
 
     def training_step(self, batch, batch_idx):
