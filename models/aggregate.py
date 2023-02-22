@@ -722,13 +722,10 @@ def select_method(head_type:str='avgpool', input_dim:int=768, layer_ids:Union[st
         return VQWeightedAvgPool(shrink=kwargs['shrink'])
     elif head_type=='vq_squeeze':
         return VQSqueezedAvgPool()
-<<<<<<< HEAD
     elif head_type=='vq_super':
         return VQAvgSuperPool()
-=======
     elif head_type=='vq_one_hot_ap':
         return VQOneHotAttentivePooling(input_dim = input_dim)
->>>>>>> b53408e3184fee9cd969c4cc3a1b4715405ba052
     elif head_type=='prob':
         return ProbWeightedAvgPool(a=kwargs.get('a'), freq_path=kwargs['freq_path'])
     elif head_type=='softdecay':
