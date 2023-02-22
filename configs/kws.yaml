@@ -27,7 +27,7 @@ test_dataset_config:
 test_loader_config:
   shuffle: False
 
-batch_size: 512
+batch_size: 4096
 num_workers: 8
 
 task_config:
@@ -38,7 +38,7 @@ task_config:
 # 2. Optimizer
 optimizer: adam
 optimizer_config:
-  lr: 0.001
+  lr: 0.01
   weight_decay: 0
 
 
@@ -55,7 +55,7 @@ scheduler_config:
 
 
 # 5. Trainer
-max_epoch: 100
+max_epoch: 200
 devices: -1
 accelerator: cuda
 num_sanity_val_steps: 2
