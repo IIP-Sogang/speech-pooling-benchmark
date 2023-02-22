@@ -110,7 +110,7 @@ def train(config):
         print("no pre-trained weight are loaded")
 
 
-def test():
+def test(config):
     print("test")
 
     # sets seeds for numpy, torch and python.random.    
