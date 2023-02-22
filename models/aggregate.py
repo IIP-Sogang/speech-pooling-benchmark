@@ -440,6 +440,64 @@ class SelfAttentiveMaskingPooling(nn.Module):
 
         return feature
     
+
+class VQOneHotAttentivePooling(nn.Module):
+    """
+    Average by VQ indices.
+    """
+    def __init__(self, shrink='exact', input_dim = 768) -> None:
+        super().__init__()
+        self._eq_key = shrink
+
+        VQ_MAX_INDEX = 320
+        
+        assert input_dim%2 == 0, "input_dim must be even"
+
+        self.linear_former = nn.Linear(VQ_MAX_INDEX, int(input_dim / 2)) # 320, D
+        self.linear_later = nn.Linear(VQ_MAX_INDEX, int(input_dim / 2))
+
+        # Q, K, V
+        self.query = nn.Linear(input_dim, input_dim)
+        self.key = nn.Linear(input_dim, input_dim)
+        self.value = nn.Linear(input_dim, input_dim)
+    
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, vq_indices:Tensor):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        vq index size should follow (Batch size, Length, 2)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        from itertools import groupby
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        
+        input_feature = input_feature[:,-1:] # Select last layer only
+        B, N, L, D = input_feature.shape
+
+        vq_indices = Tensor.long(vq_indices) # modify dtype float32 -> int64
+
+        # one-hot encoding
+        vq_indices_one_hot = torch.nn.functional.one_hot(vq_indices, num_classes = 320) # B, L, 2, 320
+        vq_indices_one_hot = Tensor.float(vq_indices_one_hot) # modify dtype int64 -> float32
+
+        vq_feats_former = torch.tanh(self.linear_former(vq_indices_one_hot[:,:,0,:])) # B, L, D/2
+        vq_feats_later = torch.tanh(self.linear_later(vq_indices_one_hot[:,:,1,:])) # B, L, D/2
+
+        # concatenate
+        vq_feats = torch.cat([vq_feats_former, vq_feats_later], dim = -1) # B, L, D
+
+        query = self.query(vq_feats) # B, L, D
+        key = self.key(vq_feats) # B, L, D
+        value = self.value(input_feature.squeeze()) # B, L, D
+
+        # calculate scaled-dot attention
+        score = torch.bmm(query, key.permute(0, 2, 1)) / torch.sqrt(torch.tensor(D)) # B, L, L
+        attention_weights = torch.softmax(score, dim = -1)
+
+        outputs = torch.bmm(attention_weights, value) # (B, L, L) x (B, L, D) -> (B, L, D)
+
+        return outputs.sum(1)
+    
+    
     
 class XVector(nn.Module):
     def __init__(self, input_dim = 40, num_classes=8):
@@ -664,8 +722,13 @@ def select_method(head_type:str='avgpool', input_dim:int=768, layer_ids:Union[st
         return VQWeightedAvgPool(shrink=kwargs['shrink'])
     elif head_type=='vq_squeeze':
         return VQSqueezedAvgPool()
+<<<<<<< HEAD
     elif head_type=='vq_super':
         return VQAvgSuperPool()
+=======
+    elif head_type=='vq_one_hot_ap':
+        return VQOneHotAttentivePooling(input_dim = input_dim)
+>>>>>>> b53408e3184fee9cd969c4cc3a1b4715405ba052
     elif head_type=='prob':
         return ProbWeightedAvgPool(a=kwargs.get('a'), freq_path=kwargs['freq_path'])
     elif head_type=='softdecay':

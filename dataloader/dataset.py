@@ -43,7 +43,8 @@ class SpeechCommandDataset(torchaudio.datasets.SPEECHCOMMANDS):
         self.folder_in_archive = folder_in_archive
         self.ext = ext
 
-        self._vq_path = os.path.join(root, vq_folder, url)
+        self._vq_path = os.path.join(root, vq_folder, url) if vq_folder is not None else None
+        # self._vq_path = os.path.join(root, vq_folder, url)
 
         if subset == "validation": pass
         elif subset == "testing": pass
@@ -61,7 +62,7 @@ class SpeechCommandDataset(torchaudio.datasets.SPEECHCOMMANDS):
         
     def __getitem__(self, n: int) -> Tuple[Tensor, int]:
         if self.ext == 'pt':
-            pt_path = self.get_metadata(n)
+            pt_path = self.get_idx_path(n)
             label:str = os.path.basename(os.path.dirname(pt_path))
             label:int = self.label2index(label)
             if self._vq_path:
@@ -72,7 +73,7 @@ class SpeechCommandDataset(torchaudio.datasets.SPEECHCOMMANDS):
         else:
             return super().__getitem__(n)[:2] #Tuple[Tensor, int, str, str, int]
 
-    def get_metadata(self, index):
+    def get_idx_path(self, index):
         return self._walker[index]
 
     def label2index(self, label):
@@ -82,7 +83,7 @@ class SpeechCommandDataset(torchaudio.datasets.SPEECHCOMMANDS):
         return self.CLASS_DICT_INV[index]
 
     def generate_feature_path(self, index, new_root:str=None, tag:str='_feat'):
-        old_path = self.get_metadata(index)
+        old_path = self.get_idx_path(index)
         new_path = old_path.replace(self.folder_in_archive, self.folder_in_archive + tag).replace('.wav','.pt')
         
         if not os.path.exists(os.path.dirname(new_path)):
@@ -245,7 +246,7 @@ class IEMOCAPDataset(IEMOCAP):
         ext:str='wav',
         feature_path_tag:str='_feat_1_12',
         vq_path_tag:str=None,
-        final_classes: Tuple[str] = ("neu", "hap", "ang", "sad"),
+        final_classes: Tuple[str] = ("neu", "hap", "ang", "sad", "exc"),
         **kwargs,
     ):
         root = Path(root)
@@ -298,10 +299,10 @@ class IEMOCAPDataset(IEMOCAP):
                         label = line[2] # 'neu'
                         if wav_stem not in all_data: 
                             continue
-                        if label not in final_classes: # ["neu", "hap", "ang", "sad", "exc", "fru"]
+                        if label not in final_classes: # ["neu", "hap", "ang", "sad", "exc"]
                             continue
                         self.mapping[wav_stem] = {}
-                        self.mapping[wav_stem]["label"] = label
+                        self.mapping[wav_stem]["label"] = label.replace('exc', 'hap') # 
 
             for wav_path in wav_paths:
                 wav_stem = str(Path(wav_path).stem)
