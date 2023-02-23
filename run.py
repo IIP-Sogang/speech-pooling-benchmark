@@ -3,6 +3,7 @@ import os.path as osp
 import argparse
 
 TASKS = ['KWS','IC','ER','ASV']
+FEATUREEXTRACTOR = ['wav2vec2_base', 'xlsr_300m']
 
 if __name__ == "__main__":
     ## Parse arguments
@@ -25,18 +26,26 @@ if __name__ == "__main__":
         os.makedirs(exp_path)
 
     import subprocess
-    for task in TASKS:
-        task = task.lower()
-        with open(f'configs/{task}.yaml', "r") as f:
-            task_config_scripts = f.read()
-    
-        if args.mode=='train':
-            with open(f'{exp_path}/{task}.yaml', 'w') as f:
-                f.write(f'default_root_dir: {exp_path}/{task}\n')
-                f.write(task_config_scripts+'\n')
-                f.write(model_config_scripts)
-        elif args.mode=='test':
-            pass
+    # extractor loop
+    for extractor in FEATUREEXTRACTOR:
+        print(f"extractor : {extractor}")
+        #  task loop
+        for task in TASKS:
+            print(f"task : {task}")
+            task = task.lower()
+            with open(f'configs/{task}.yaml', "r") as f:
+                task_config_scripts = f.read()
+            with open(f'configs/{task}_{extractor}.yaml', "r") as f:
+                data_config_scripts = f.read()
+        
+            if args.mode=='train':
+                with open(f'{exp_path}/{task}_{extractor}.yaml', 'w') as f:
+                    f.write(f'default_root_dir: {exp_path}/{task}\n')
+                    f.write(data_config_scripts+'\n')
+                    f.write(task_config_scripts+'\n')                    
+                    f.write(model_config_scripts)                    
+            elif args.mode=='test':
+                pass
 
-        command = f'python main.py --config {exp_path}/{task}.yaml --mode {args.mode}'
-        subprocess.run(command.split())
+            command = f'python main.py --config {exp_path}/{task}_{extractor}.yaml --mode {args.mode}'
+            subprocess.run(command.split())
