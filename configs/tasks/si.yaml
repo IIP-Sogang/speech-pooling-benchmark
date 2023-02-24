@@ -1,0 +1,79 @@
+# 1. DataLoader
+training_dataset_config:
+  data_name: 'voxceleb'
+  root: 'data/voxceleb1_1_12'
+  vq_root: 'data/voxceleb1_vq'
+  subset: 'training'
+  url: 'iden_split.txt'
+  ext: 'pt'
+train_loader_config:
+  shuffle: True
+validation_dataset_config:
+  data_name: 'voxceleb'
+  root: 'data/voxceleb1_1_12'
+  vq_root: 'data/voxceleb1_vq'
+  subset: 'validation'
+  url: 'iden_split.txt'
+  ext: 'pt'
+validation_loader_config:
+  shuffle: False
+test_dataset_config:
+  data_name: 'voxceleb'
+  root: 'data/voxceleb1_1_12'
+  vq_root: 'data/voxceleb1_vq'
+  subset: 'testing'
+  url: 'iden_split.txt'
+  ext: 'pt'
+test_loader_config:
+  shuffle: False
+
+batch_size: 128
+num_workers: 8
+
+task_config:
+  metric: 'acc'
+  sample_input_size: 10 40 768
+
+
+# 2. Optimizer
+optimizer: adam
+optimizer_config:
+  lr: 0.001
+  weight_decay: 0
+
+# 3. LossFunction
+loss: clip_ce
+
+
+# 4. Scheduler
+scheduler: none
+scheduler_config:
+  step_size: 50
+  gamma: 0.9
+  last_epoch: -1
+
+
+# 5. Trainer
+max_epoch: 50
+devices: -1
+accelerator: cuda
+num_sanity_val_steps: 2
+profiler: null # advanced
+
+
+# 6. Checkpoint
+resume_checkpoint: null
+checkpoint_config:
+  save_top_k: 5
+  monitor: "val_ACC"
+  mode: "max"
+  filename: "AVG-SpeechCommandsV2-{epoch:02d}-{val_loss:.2f}-{val_ACC:02.2f}"
+
+
+# 7. Random Seed
+random_seed: 2301235
+
+# 2. Model
+model: SpeakerIdentificationModule
+model_config:
+  input_dim: 768
