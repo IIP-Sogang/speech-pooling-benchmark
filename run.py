@@ -2,7 +2,7 @@ import os
 import os.path as osp
 import argparse
 
-TASKS = ['KWS','IC','ER','ASV']
+TASKS = ['KWS','IC','ER','SI']
 
 if __name__ == "__main__":
     ## Parse arguments
@@ -19,24 +19,25 @@ if __name__ == "__main__":
         model_config_scripts = f.read()
         # model_config = yaml.safe_load(f)
 
-    # Generate configs for training
-    exp_path = f'exp/{args.exp}'
-    if not osp.exists(exp_path):
-        os.makedirs(exp_path)
-
     import subprocess
     for task in TASKS:
         task = task.lower()
-        with open(f'configs/{task}.yaml', "r") as f:
+        with open(f'configs/tasks/{task}.yaml', "r") as f:
             task_config_scripts = f.read()
     
+        # Generate configs for training
+        exp_path = f'exp/{task}/{args.exp}'
+        if not osp.exists(exp_path):
+            os.makedirs(exp_path)
+
         if args.mode=='train':
-            with open(f'{exp_path}/{task}.yaml', 'w') as f:
-                f.write(f'default_root_dir: {exp_path}/{task}\n')
+            # assert not osp.exists(f'exp/{task}/{args.exp}.yaml'), "Exp Results can be Overwritten"
+            with open(f'exp/{task}/{args.exp}.yaml', 'w') as f:
+                f.write(f'default_root_dir: {exp_path}\n')
                 f.write(task_config_scripts+'\n')
                 f.write(model_config_scripts)
         elif args.mode=='test':
             pass
 
-        command = f'python main.py --config {exp_path}/{task}.yaml --mode {args.mode}'
+        command = f'python main.py --config exp/{task}/{args.exp}.yaml --mode {args.mode}'
         subprocess.run(command.split())
