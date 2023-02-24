@@ -1,0 +1,25 @@
+# 1. DataLoader
+training_dataset_config:
+  data_name: 'fluent'
+  root: '/home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset_xlsr_1_24'
+  vq_root: '/home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset_xlsr_vq'
+  subset: 'training'
+  ext: 'pt'
+train_loader_config:
+  shuffle: True
+validation_dataset_config:
+  data_name: 'fluent'
+  root: '/home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset_xlsr_1_24'
+  vq_root: '/home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset_xlsr_vq'
+  subset: 'validation'
+  ext: 'pt'
+validation_loader_config:
+  shuffle: False
+test_dataset_config:
+  data_name: 'fluent'
+  root: '/home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset_xlsr_1_24'
+  vq_root: '/home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset_xlsr_vq'
+  subset: 'testing'
+  ext: 'pt'
+test_loader_config:
+  shuffle: False
