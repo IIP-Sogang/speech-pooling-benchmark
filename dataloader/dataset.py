@@ -72,6 +72,10 @@ class SpeechCommandDataset(torchaudio.datasets.SPEECHCOMMANDS):
                 return (torch.load(pt_path, map_location='cpu'), label)
         else:
             return super().__getitem__(n)[:2] #Tuple[Tensor, int, str, str, int]
+        
+    def shuffle(self) -> None:
+        import random
+        random.shuffle(self._walker)
 
     def get_idx_path(self, index):
         return self._walker[index]
@@ -139,10 +143,10 @@ class VoxCelebDataset(VoxCeleb1Identification):
             return super().__getitem__(n)[:2]
         else:
             metadata = self.get_metadata(n)
-            pt = torch.load(os.path.join(self._path, metadata[0]))
+            pt = torch.load(os.path.join(self._path, metadata[0].replace(".wav", self._ext_audio)))
             spk_label = self.id2class[metadata[2]]
             if self._vq_path:
-                vq_index = torch.load(os.path.join(self._vq_path, metadata[0]))
+                vq_index = torch.load(os.path.join(self._vq_path, metadata[0].replace(".wav", self._ext_audio)))
                 return (pt, spk_label, vq_index) # (pt, spk_id, vq_index)
             else:
                 return (pt, spk_label) # (pt, spk_id)
@@ -152,7 +156,7 @@ class VoxCelebDataset(VoxCeleb1Identification):
         spks = list()
         with os.scandir(self.root) as it:
             for entry in it:
-                if entry.is_dir() and entry.name not in self.VRF_TEST_SPEAKER_ID:
+                if entry.is_dir():
                     spks.append(int(entry.name[3:]))
         print(f"TOTAL {len(spks)} SPEAKERS ARE FOUND")
         return {spk_id:i for i, spk_id in enumerate(spks)}
@@ -208,6 +212,16 @@ class VoxCelebVerificationDataset(VoxCeleb1Verification):
 
         elif self._ext_audio == '.wav':
             return self.__getitem__(n)
+        
+    def _map_spk_id(self)->int:
+        import os
+        spks = list()
+        with os.scandir(self.root) as it:
+            for entry in it:
+                if entry.is_dir() and entry.name not in self.VRF_TEST_SPEAKER_ID:
+                    spks.append(int(entry.name[3:]))
+        print(f"TOTAL {len(spks)} SPEAKERS ARE FOUND")
+        return {spk_id:i for i, spk_id in enumerate(spks)}
 
     @property
     def return_vq(self):

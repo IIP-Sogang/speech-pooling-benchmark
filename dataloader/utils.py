@@ -30,18 +30,25 @@ def load_dataset(data_name:str='speechcommands', get_collate_fn:bool=False, **kw
             assert key in kwargs, f"Pass '{key}' through the config yaml file!!"
         
         # Select Dataset & collate function
-        if kwargs['subset'] == 'training':
-            dataset = VoxCelebDataset(**kwargs)
-            if dataset.return_vq:
-                collate_fn = pad_collate_vq
-            else:
-                collate_fn = pad_collate
+        # Speaker Identification
+        dataset = VoxCelebDataset(**kwargs)
+        if dataset.return_vq:
+            collate_fn = pad_collate_vq
         else:
-            dataset = VoxCelebVerificationDataset(**kwargs)
-            if dataset.return_vq:
-                collate_fn = pad_double_collate_vq
-            else:
-                collate_fn = pad_double_collate
+            collate_fn = pad_collate
+        # ASV version # NOTE(JK) Deprecated!!
+        # if kwargs['subset'] == 'training':
+        #     dataset = VoxCelebDataset(**kwargs)
+        #     if dataset.return_vq:
+        #         collate_fn = pad_collate_vq
+        #     else:
+        #         collate_fn = pad_collate
+        # else:
+        #     dataset = VoxCelebVerificationDataset(**kwargs)
+        #     if dataset.return_vq:
+        #         collate_fn = pad_double_collate_vq
+        #     else:
+        #         collate_fn = pad_double_collate
 
     elif data_name == 'iemocap':
         for key in ['root']:
@@ -69,7 +76,7 @@ def load_dataset(data_name:str='speechcommands', get_collate_fn:bool=False, **kw
             assert key in kwargs, f"Pass '{key}' through the config yaml file!!"
         dataset = _FluentSpeechCommandsDataset(**kwargs)
         if dataset.return_vq:
-            raise NotImplementedError
+            collate_fn = pad_collate_slot_vq
         else:
             collate_fn = pad_collate_slot
 
@@ -197,6 +204,33 @@ def pad_collate_vq(batch:List[Tuple[Tensor, int, Tensor]]):
 
     return data, data_lengths, vq_index, labels
 
+def pad_collate_slot_vq(batch:List[Tuple[Tensor, int]]):
+    batch_size = len(batch)
+    batch_sample = batch[0][0]
+    batch_dim = len(batch_sample.shape)
+    
+    max_array_length = 0
+
+    search_dim = 0 if batch_dim == 2 else 1
+    data_lengths = torch.zeros((batch_size,), dtype=torch.long)
+    for i, (array, _, _) in enumerate(batch):
+        data_lengths[i] = array.size(search_dim)
+    max_array_length = data_lengths.max()
+
+    data = torch.zeros((batch_size, max_array_length, batch_sample.size(-1))) if batch_dim == 2 \
+           else torch.zeros((batch_size, batch_sample.size(0), max_array_length, batch_sample.size(-1)))
+    vq_index = torch.zeros((batch_size, max_array_length, 2))
+    labels = torch.zeros((batch_size, 3), dtype=torch.long)
+    
+    for i, (array, label, vq_array) in enumerate(batch):
+        if batch_dim == 2:
+            data[i, :len(array)] = array
+        else:
+            data[i, :, :array.size(1)] = array
+        vq_index[i, :vq_array.size(0)] = vq_array
+        labels[i] = label
+
+    return data, data_lengths, vq_index, labels
 
 def pad_double_collate_vq(batch:List[Tuple[Tensor, Tensor, int, Tensor, Tensor]]):
     """
