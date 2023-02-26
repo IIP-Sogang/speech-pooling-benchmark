@@ -49,3 +49,4 @@ random_seed: 2301235
 model: SpeakerIdentificationModule
 model_config:
   input_dim: 768
+  num_classes: 1251

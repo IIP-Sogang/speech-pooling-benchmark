@@ -1,3 +1,5 @@
   head_type: 'white'
-  layer_ids: 0 1
+  layer_ids: -1
   whitening: true
+  mean_vector_path: null
+  whiten_factor_path: null

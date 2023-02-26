@@ -1,0 +1,23 @@
+# 1. DataLoader
+training_dataset_config:
+  data_name: 'iemocap'
+  root: '/home/data/IEMOCAP'
+  sessions: [1, 3, 4, 5]
+  utterance_type: null # "scripted" or "improvised" or null. if null it contain both ["scripted" and "improvised"]
+  ext: 'pt'
+  feature_path_tag: '_wav2vec2_base_mean'
+  vq_path_tag: '_wav2vec2_base_vq'
+  final_classes: ["neu", "hap", "ang", "sad" , "exc"] # we drop the unbalance emotion classes to leave the final four classes (neutral, happy, sad, angry)
+train_loader_config:
+  shuffle: True
+test_dataset_config:
+  data_name: 'iemocap'
+  root: '/home/data/IEMOCAP'
+  sessions: [2]
+  utterance_type: null
+  ext: 'pt'
+  feature_path_tag: '_wav2vec2_base_mean'
+  vq_path_tag: '_wav2vec2_base_vq'
+  final_classes: ["neu", "hap", "ang", "sad", "exc"] # we drop the unbalance emotion classes to leave the final four classes (neutral, happy, sad, angry)
+test_loader_config:
+  shuffle: False

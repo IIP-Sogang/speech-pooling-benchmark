@@ -1,7 +1,7 @@
 # 1. DataLoader
 training_dataset_config:
   data_name: 'iemocap'
-  root: '/home/nas4/DB/IEMOCAP'
+  root: '/home/data/IEMOCAP'
   sessions: [1, 2, 3, 4]
   utterance_type: null # "scripted" or "improvised" or null. if null it contain both ["scripted" and "improvised"]
   ext: 'pt'
@@ -12,7 +12,7 @@ train_loader_config:
   shuffle: True
 test_dataset_config:
   data_name: 'iemocap'
-  root: '/home/nas4/DB/IEMOCAP'
+  root: '/home/data/IEMOCAP'
   sessions: [5]
   utterance_type: null
   ext: 'pt'

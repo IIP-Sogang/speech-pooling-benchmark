@@ -2,5 +2,6 @@ from models.tasks.asv.asv import SpeakerVerificationModule
 from models.tasks.classifier import SimpleClassificationModule
 
 KeywordSpottingModule = SimpleClassificationModule
+SpeakerIdentificationModule = SimpleClassificationModule
 EmotionRecognitionModule = SimpleClassificationModule
 IntentClassificationModule = SimpleClassificationModule
