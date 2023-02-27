@@ -9,19 +9,18 @@ from dataloader.dataset import DATA_LIST
 from models.feats_extractor import Wav2VecXLSR03BExtractor, Wav2VecExtractor, VQWav2VecExtractor, VQWav2VecXLSR03BExtractor, load_extractor
 
 
-def main(data_name:str, root:str='data', new_root:str='data2', url:str=None, subset:str=None, tag:str=None, ext_type = 'Wav2VecXLSR03BExtractor', method = 'vq', **kwargs):
+def main(data_name:str, root:str='data', new_root:str='data2', url:str=None, subset:str=None, tag:str=None, ext_type = 'Wav2VecXLSR03BExtractor', method = 'vq', layer_ids = None, **kwargs):
     assert data_name in DATA_LIST, f"{data_name} IS NOT EXISTING DATASET!!"
 
 
     DEVICE = 'cuda'if torch.cuda.is_available() else 'cpu'
     dataset = load_dataset(root=root, data_name=data_name, url=url, subset=subset, ext='wav') # should return (an audio array, sampling rate)
-    # dataset = load_dataset(root=root, data_name=data_name, subset=subset, ext='wav')
 
     # select baseline model(feature extractor)
     extractor = load_extractor(ext_type = ext_type)
     extractor = extractor.to(DEVICE)
-
     extractor.eval()
+
     for i in tqdm.tqdm(range(len(dataset))):
         new_path = dataset.generate_feature_path(i, new_root=new_root, tag=tag)
         waveform, sr = dataset[i]
@@ -36,6 +35,20 @@ def main(data_name:str, root:str='data', new_root:str='data2', url:str=None, sub
         
         elif method == 'vq':
             save_features = features.detach().cpu()
+
+        elif method == 'last':
+            assert layer_id is not None, "layer_id should be given"
+
+            layer_ids = list(map(int, layer_ids.split('_')))
+
+            features = [feature.detach().cpu() for feature in features]
+            features = torch.cat(features, axis=0)            
+            
+            # Save features from selected layers
+            save_features = list()
+            for layer_id in layer_ids:
+                save_features.append(features[layer_id])
+            save_features = torch.stack(save_features)
 
         else:
             raise Exception
@@ -82,7 +95,7 @@ if __name__=='__main__':
     parser.add_argument('--tag',         type=str,   default='_wav2vec2_large_vq',   help='_xlsr_feat_1_24 | _xlsr_1_24 | _xlsr_vq | _hubert_large_1_24 | _wav2vec2_large_mean')
     # parser.add_argument('--tag',         type=str,   default='_wav2vec2_large_1_24',   help='_xlsr_feat_1_24 | _xlsr_1_24 | _xlsr_vq | _hubert_large_1_24')
     # parser.add_argument('--tag',         type=str,   default='_hubert_large_1_24',   help='_xlsr_feat_1_24 | _xlsr_1_24 | _xlsr_vq')
-    # parser.add_argument('--layer_ids',         type=str,   default='1_-1',   help='1_12 | 1_-1') # depreciated
+    parser.add_argument('--layer_ids',         type=str,   default=None,   help='1_12 | 1_-1') # depreciated
     # parser.add_argument('--ext_type',         type=str,   default='HubertLarge',   help='select feature extractor')
     parser.add_argument('--ext_type',         type=str,   default='VQWav2VeLargeExtractor',   help='select feature extractor') # VQWav2VeLargeExtractor | VQWav2VecXLSR03BExtractor
     parser.add_argument('--method',         type=str,   default='vq',   help='vq | mean')
