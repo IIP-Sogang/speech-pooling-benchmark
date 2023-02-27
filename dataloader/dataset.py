@@ -159,7 +159,7 @@ class VoxCelebDataset(VoxCeleb1Identification):
                 if entry.is_dir():
                     spks.append(int(entry.name[3:]))
         print(f"TOTAL {len(spks)} SPEAKERS ARE FOUND")
-        return {spk_id:i for i, spk_id in enumerate(spks)}
+        return {spk_id:i for i, spk_id in enumerate(sorted(spks))}
 
     @property
     def return_vq(self):
