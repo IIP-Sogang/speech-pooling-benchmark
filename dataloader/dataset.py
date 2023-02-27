@@ -120,7 +120,7 @@ class VoxCelebDataset(VoxCeleb1Identification):
 
     def __init__(self, root:str='data', vq_root:str=None, subset:str='training', url:str='vrfy_split.txt', ext:str='pt', download=False, **kwargs):
         assert subset in ['training','validation','testing']
-        assert os.path.exists(root)
+        assert os.path.exists(root), f"{root} do not exist!"
         subset = map_subset_voxceleb(subset)
         super().__init__(root=root, subset=subset, meta_url=url, download=download)
         self._ext_audio = '.'+ext
@@ -270,7 +270,7 @@ class IEMOCAPDataset(IEMOCAP):
         self.vq_path_tag = vq_path_tag
 
         if not os.path.isdir(self._path):
-            raise RuntimeError("Dataset not found.")
+            raise RuntimeError(f"Dataset not found from {self._path}")
 
         if utterance_type not in ["scripted", "improvised", None]:
             raise ValueError("utterance_type must be one of ['scripted', 'improvised', or None]")
@@ -330,7 +330,7 @@ class IEMOCAPDataset(IEMOCAP):
             pt_path = self.generate_feature_path(n, new_root = new_root, tag = self.feature_path_tag)
             wav_path, sr, wav_stem, label, speaker = self.get_metadata(n)
             emo_label = self.label2index(label)
-            if self.vq_path_tag:
+            if self.vq_path_tag is not None:
                 vq_index_path = self.generate_feature_path(n, new_root = new_root, tag = self.vq_path_tag)
                 return (torch.load(pt_path, map_location='cpu'), emo_label, torch.load(vq_index_path, map_location='cpu'))
             else:
@@ -338,7 +338,7 @@ class IEMOCAPDataset(IEMOCAP):
         else:
             return super().__getitem__(n)[:2] #Tuple[Tensor, int, str, str, int]
         
-    def generate_feature_path(self, index, new_root:str='/home/nas4/DB/IEMOCAP/IEMOCAP', tag:str='_feat_1_12'):
+    def generate_feature_path(self, index, new_root:str='/home/data/IEMOCAP/IEMOCAP', tag:str='_feat_1_12'):
         wav_path, _, _, _, _ = self.get_metadata(index)
         old_path = str(self._path / wav_path)
         new_path = old_path.replace(str(self._path), new_root+tag).replace('.wav','.pt')
@@ -389,7 +389,7 @@ class _FluentSpeechCommandsDataset(torch.utils.data.Dataset):
         self._vq_path = os.fspath(vq_root) if vq_root else None
 
         if not os.path.isdir(self._path):
-            raise RuntimeError("Dataset not found.")
+            raise RuntimeError(f"Dataset not found from {self._path}.")
 
         subset_path = os.path.join(self._path, "data", f"{subset}_data.csv")
         with open(subset_path) as subset_csv:
