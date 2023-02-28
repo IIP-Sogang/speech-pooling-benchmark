@@ -9,13 +9,27 @@ from torch.utils.data import Dataset, DataLoader
 
 from dataloader.utils import load_dataset
 
-extract_vq_index = False
-extract_mean_vector = True
+# === ARGUMENTS ===
 
-upstream = "xlsr"
-feat = "mean"
-f_dim = 1024
-vg = 320
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--upstream', type=str, default='wav2vec2_large')
+parser.add_argument('--dim', type=int, default=1024)
+parser.add_argument('--vg', type=int, default=320)
+parser.add_argument('--tail', type=str, default='mean')
+parser.add_argument('--vq_tail', type=str, default='vq')
+parser.add_argument('--mode', type=str, default='both', help='mean | vq | both')
+args = parser.parse_args()
+
+assert args.mode in ['mean','vq','both'], "Undefined Mode Selection"
+extract_vq_index = args.mode in ['vq, 'both']
+extract_mean_vector = args.mode in ['mean', 'both']
+
+upstream = args.upstream
+feat = args.tail
+f_dim = args.dim
+vg = args.vg
 
 
 # === DATALOADER ===
@@ -23,13 +37,14 @@ vg = 320
 dataloaders = {}
 
 session_num = [1,2,3,4,5]
+#session_num  = []
 
 for except_session in range(len(session_num)):
     sessions = deepcopy(session_num)
     sessions.pop(except_session)
     dataset, collate_fn = load_dataset(
         data_name= 'iemocap',
-        root= '/home/nas4/DB/IEMOCAP',
+        root= '/home/data/IEMOCAP',
         utterance_type= None,
         ext= 'pt',
         feature_path_tag= f'_{upstream}_{feat}',
@@ -58,13 +73,13 @@ kwargs_list = {
         ext= 'pt', get_collate_fn=True),
     "fluent": dict(
         data_name= 'fluent',
-        root= f'/home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset_{upstream}_{feat}',
-        vq_root= f'/home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset_{upstream}_vq' if extract_vq_index else None,
+        root= f'/home/fluent_speech_commands/fluent_speech_commands_dataset_{upstream}_{feat}',
+        vq_root= f'/home/fluent_speech_commands/fluent_speech_commands_dataset_{upstream}_vq' if extract_vq_index else None,
         ext= 'pt', get_collate_fn=True),
     "voxceleb": dict(
         data_name= 'voxceleb',
-        root= f'/home/voxceleb/voxceleb1_{upstream}_{feat}',
-        vq_root= f'/home/voxceleb/voxceleb1_{upstream}_vq' if extract_vq_index else None,
+        root= f'data/voxceleb1_{upstream}_{feat}',
+        vq_root= f'data/voxceleb1_{upstream}_vq' if extract_vq_index else None,
         url= 'iden_split.txt',
         ext= 'pt', get_collate_fn=True),
 }
@@ -101,8 +116,9 @@ for data_name in kwargs_list:
 
 # === GET STATS ===
 for data_key, _dataloaders in dataloaders.items():
-    if os.path.exists(f'models/stats/{data_key}/mean_{upstream}_{feat}.pt'): 
-        print(f"models/stats/{data_key}/mean_{upstream}_{feat}.pt Exists")
+    if (extract_mean_vector and os.path.exists(f'models/stats/{data_key}/mean_{upstream}_{feat}.pt')) \
+    or (extract_vq_index and os.path.exists(f'models/stats/{data_key}/freq_{upstream}.pt')):
+        print(f"models/stats/{data_key} Exists")
         continue
     print(data_key)
     train_dataloader, val_dataloader, test_dataloader = _dataloaders.values()

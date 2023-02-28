@@ -1,5 +1,5 @@
 
-from typing import List, Tuple
+from typing import List, Literal, Tuple, Union
 import pandas as pd
 
 from dataloader.utils import load_dataset
@@ -10,27 +10,42 @@ from torch.utils.data import Dataset, DataLoader
 from dataloader.utils import load_dataset
 
 
-def load_extracted_feature_dict(dir_tag:str='1_12', vq_dir_tag:str='vq')->dict:
+##========================
+## Load DataLoader
+##========================
+def load_extracted_feature_dict(dir_tag:str='1_12', vq_dir_tag:str='vq')->dict:    
+    """
+    Dict
+     - Dataset #1
+         - train
+         - val
+         - test
+     - Dataset #2
+    Example Usage
+    dataloader = load_extracted_feature_dict(..., ...)
+    dataloader['speechcommands']['train'] <- This is dataloader
+    """
+
     dataloaders = {}
 
     kwargs_list = {
-        # "speechcommands": dict(
-        #     root= 'data',
-        #     folder_in_archive= f'SpeechCommands_{dir_tag}',
-        #     # vq_folder= f'SpeechCommands_{vq_dir_tag}',
-        #     url= 'speech_commands_v0.02',
-        #     ext= 'pt', get_collate_fn=True),
-        # "fluent": dict(
-        #     data_name= 'fluent',
-        #     root= f'/home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset_{dir_tag}',
-        #     # vq_root= f'/home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset_{vq_dir_tag}',
-        #     ext= 'pt', get_collate_fn=True),
-        # "voxceleb": dict(
-        #     data_name= 'voxceleb',
-        #     root= f'data/voxceleb1_{dir_tag}',
-        #     # vq_root= f'data/voxceleb1_{vq_dir_tag}',
-        #     url= 'iden_split.txt',
-        #     ext= 'pt', get_collate_fn=True),
+        "speechcommands": dict(
+            root= 'data',
+            folder_in_archive= f'SpeechCommands_{dir_tag}',
+            vq_folder= f'SpeechCommands_{vq_dir_tag}',
+            url= 'speech_commands_v0.02',
+            ext= 'pt', get_collate_fn=True),
+        "fluent": dict(
+            data_name= 'fluent',
+            root= f'/home/fluent_speech_commands/fluent_speech_commands_dataset_{dir_tag}',
+            vq_root= f'/home/fluent_speech_commands/fluent_speech_commands_dataset_{vq_dir_tag}',
+            ext= 'pt', get_collate_fn=True),
+        "voxceleb": dict(
+            data_name= 'voxceleb',
+            root= f'/home/voxceleb/voxceleb1_{dir_tag}',
+            vq_root= f'/home/voxceleb/voxceleb1_{vq_dir_tag}',
+            url= 'iden_split.txt',
+            ext= 'pt', get_collate_fn=True),
     }
 
     for data_name in kwargs_list:
@@ -64,29 +79,29 @@ def load_extracted_feature_dict(dir_tag:str='1_12', vq_dir_tag:str='vq')->dict:
 
     from copy import deepcopy
 
-    session_num = [1,2,3,4,5]
+    session_num = [] #[1,2,3,4,5]
 
     for except_session in range(len(session_num)):
         sessions = deepcopy(session_num)
         excluded_session_num = sessions.pop(except_session)
         trainset, collate_fn = load_dataset(
             data_name= 'iemocap',
-            root= '/home/data/IEMOCAP',
+            root= '/home/data/IEMOCAP', #'/home/nas4/DB/IEMOCAP', #
             utterance_type= None,
             ext= 'pt',
             feature_path_tag= f'_{dir_tag}',
-            # vq_path_tag= f'_{vq_dir_tag}',
+            vq_path_tag= f'_{vq_dir_tag}',
             final_classes= ["neu", "hap", "ang", "sad"],
             sessions = sessions,
             get_collate_fn=True)
         
         testset, collate_fn = load_dataset(
             data_name= 'iemocap',
-            root= '/home/data/IEMOCAP',
+            root= '/home/data/IEMOCAP', # '/home/nas4/DB/IEMOCAP', # 
             utterance_type= None,
             ext= 'pt',
             feature_path_tag= f'_{dir_tag}',
-            # vq_path_tag= f'_{vq_dir_tag}',
+            vq_path_tag= f'_{vq_dir_tag}',
             final_classes= ["neu", "hap", "ang", "sad"],
             sessions = [excluded_session_num],
             get_collate_fn=True)
@@ -112,20 +127,26 @@ def load_extracted_feature_dict(dir_tag:str='1_12', vq_dir_tag:str='vq')->dict:
 
     return dataloaders
 
+##========================
+## Load Models Probpool
+##========================
 def load_prob_models(data_tag:str='fluent', feature_tag:str='wav2vec2_base', probs:list=[0.0001, 0.001, 0.01]):
     prob_models = {}
     for prob in probs:
         prob_models[f"prob_{prob}"] = ProbWeightedAvgPool(a=prob, freq_path=f'models/stats/{data_tag}/freq_{feature_tag}.pt')
     return prob_models
-        
-def load_model_dict(data_tags:List[str]= None, feature_tag:str = 'wav2vec2_base', tail:str='')->Tuple[dict, dict]:
+
+## =====================
+## Load Model
+## =====================
+def load_model_dict(data_tags:List[str]= list(), feature_tag:str = 'wav2vec2_base', tail:str='')->Tuple[dict, dict]:
     models = dict(
         avg = SimpleAvgPool(),
         softdecay = SoftDecayPooling(),
-        # vq_ex = VQWeightedAvgPool(shrink='exact'),
-        # vq_or = VQWeightedAvgPool(shrink='or'),
-        # vq_sq = VQSqueezedAvgPool(),
-        # vq_chain = VQAvgSuperPool()
+        vq_ex = VQWeightedAvgPool(shrink='exact'),
+        vq_or = VQWeightedAvgPool(shrink='or'),
+        vq_sq = VQSqueezedAvgPool(),
+        vq_chain = VQAvgSuperPool()
     )
     
     data_depedent_models = {}
@@ -133,13 +154,15 @@ def load_model_dict(data_tags:List[str]= None, feature_tag:str = 'wav2vec2_base'
         data_depedent_models[data_tag] = {}
         data_depedent_models[data_tag]['white'] = WhiteningBERT([-1], True, f'./models/stats/{data_tag}/mean_{feature_tag}{"_"+tail if tail else ""}.pt', 
                                                                 f'./models/stats/{data_tag}/white_{feature_tag}{"_"+tail if tail else ""}.pt', normalize='L2')
-        # prob_models = load_prob_models(data_tag, feature_tag, probs=[0.00001, 0.0001, 0.001, 0.01, 0.1])
-        # data_depedent_models[data_tag].update(prob_models)
+        prob_models = load_prob_models(data_tag, feature_tag, probs=[0.00001, 0.0001, 0.001, 0.01, 0.1])
+        data_depedent_models[data_tag].update(prob_models)
         
     return models, data_depedent_models
 
 
-def train(dataloaders:dict, models:dict, data_dependent_models:dict, option:str='angular', head:str='wav2vec2_base', dir:str='.'):
+def train(dataloaders:dict, models:dict, data_dependent_models:dict, 
+          option:Literal['angular', 'euclidean', 'manhattan', 'hamming', 'dot']='angular', 
+          head:str='wav2vec2_base', dir:str='.'):
     import os
     import tqdm
     import numpy as np
@@ -160,6 +183,9 @@ def train(dataloaders:dict, models:dict, data_dependent_models:dict, option:str=
 
         for i, batch in tqdm.tqdm(enumerate(dataloader)):
             feature, length, vq, label = batch
+            # feature, length, label = batch
+            # vq = None
+
             for key in _models.keys():
                 outputs = _models[key](feature, length, vq).squeeze()
 
@@ -172,7 +198,7 @@ def train(dataloaders:dict, models:dict, data_dependent_models:dict, option:str=
             np.save(f"{dir}/{head}_{task}_{key}_label", np.array(annoy_dict[key][1]))
 
 
-def test(dataloaders:dict, models:dict, data_dependent_models:dict, option:str='angular', head:str='wav2vec2_base', log_file:str=None, dir:str='.'):
+def test(dataloaders:dict, models:dict, data_dependent_models:dict, option:str='angular', head:str='wav2vec2_base', log_file:str='', dir:str='.'):
     import os
     import tqdm
     import numpy as np
@@ -199,9 +225,9 @@ def test(dataloaders:dict, models:dict, data_dependent_models:dict, option:str='
             correct = 0
             
             for i, batch in tqdm.tqdm(enumerate(dataloader)):
-                # feature, length, vq, label = batch
-                feature, length, label = batch
-                vq = None
+                feature, length, vq, label = batch
+                # feature, length, label = batch
+                # vq = None
 
                 outputs = _models[key](feature, length, vq).squeeze()
                 neareset_index = an_idx.get_nns_by_vector(outputs, 1)[0]
@@ -223,7 +249,7 @@ if __name__ == "__main__":
     parser.add_argument('--upstream', type=str, default='wav2vec2_base')
     parser.add_argument('--tail', type=str, default='mean')
     parser.add_argument('--vq_tail', type=str, default='vq')
-    parser.add_argument('--mode', type=str, default='both')
+    parser.add_argument('--mode', type=str, default='both', help='train | test | both')
     args = parser.parse_args()
 
     dataloaders = load_extracted_feature_dict('_'.join([args.upstream,args.tail]), '_'.join([args.upstream,args.vq_tail]))
