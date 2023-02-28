@@ -1,0 +1,33 @@
+Null6: &feature_dim 1024
+
+# 1. DataLoader
+training_dataset_config:
+  data_name: 'speechcommands'
+  root: '/home/SpeechCommands'
+  subset: 'training'
+  folder_in_archive: 'SpeechCommands_wav2vec2_large_mean'
+  vq_folder: 'SpeechCommands_wav2vec2_large_vq'
+  url: 'speech_commands_v0.02'
+  ext: 'pt'
+train_loader_config:
+  shuffle: True
+validation_dataset_config:
+  data_name: 'speechcommands'
+  root: '/home/SpeechCommands'
+  subset: 'validation'
+  folder_in_archive: 'SpeechCommands_wav2vec2_large_mean'
+  vq_folder: 'SpeechCommands_wav2vec2_large_vq'
+  url: 'speech_commands_v0.02'
+  ext: 'pt'
+validation_loader_config:
+  shuffle: False
+test_dataset_config:
+  data_name: 'speechcommands'
+  root: '/home/SpeechCommands'
+  subset: 'testing'
+  folder_in_archive: 'SpeechCommands_wav2vec2_large_mean'
+  vq_folder: 'SpeechCommands_wav2vec2_large_vq'
+  url: 'speech_commands_v0.02'
+  ext: 'pt'
+test_loader_config:
+  shuffle: False
