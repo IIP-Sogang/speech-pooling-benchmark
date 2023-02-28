@@ -279,9 +279,10 @@ class IEMOCAPDataset(IEMOCAP):
         self.data = []
         self.mapping = {}
 
+        print("Activate IEMOCAP FOLD:", sessions)
         for session in sessions:
             session_name = f"Session{session}"
-            print(session_name) ###############
+            # print(session_name) ###############
             session_dir = self._path / session_name
 
             # get wav paths
