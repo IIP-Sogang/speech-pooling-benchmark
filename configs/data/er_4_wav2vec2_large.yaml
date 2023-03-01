@@ -2,12 +2,12 @@ Null1: &ext pt
 
 Null2: &data_name iemocap
 Null3: &root /home/data/IEMOCAP
-Null4: &feature_tag _wav2vec2_base_mean
-Null5: &vq_tag _wav2vec2_base_vq
-Null6: &feature_dim 768
+Null4: &feature_tag _wav2vec2_large_mean
+Null5: &vq_tag _wav2vec2_large_vq
+Null6: &feature_dim 1024
 
-Null7: &sessions [1,2,4,5]
-Null8: &not_sessions [3]
+Null7: &sessions [1,2,3,4]
+Null8: &not_sessions [5]
 Null9: &classes ["neu", "hap", "ang", "sad", "exc"]
 
 # 1. DataLoader

@@ -1,8 +1,8 @@
 Null1: &ext pt
 
 Null2: &data_name voxceleb
-Null3: &root /home/voxceleb/voxceleb1_wav2vec2_base_mean
-Null4: &vq_root /home/voxceleb/voxceleb1_wav2vec2_base_vq
+Null3: &root /home/voxceleb/voxceleb1_wav2vec2_large_mean
+Null4: &vq_root /home/voxceleb/voxceleb1_wav2vec2_large_vq
 Null5: &split_path iden_split.txt
 Null6: &feature_dim 1024
 

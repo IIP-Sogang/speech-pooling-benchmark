@@ -1,9 +1,8 @@
 Null1: &ext pt
 
-Null2: &data_name voxceleb
-Null3: &root /home/voxceleb/voxceleb1_wav2vec2_base_mean
-Null4: &vq_root /home/voxceleb/voxceleb1_wav2vec2_base_vq
-Null5: &split_path iden_split.txt
+Null2: &data_name fluent
+Null3: &root /home/fluent_speech_commands/fluent_speech_commands_dataset_wav2vec2_large_mean
+Null5: &vq_root /home/fluent_speech_commands/fluent_speech_commands_dataset_wav2vec2_large_vq
 Null6: &feature_dim 1024
 
 # 1. DataLoader
@@ -12,7 +11,6 @@ training_dataset_config:
   root: *root
   vq_root: *vq_root
   subset: 'training'
-  url: *split_path
   ext: *ext
 train_loader_config:
   shuffle: True
@@ -21,7 +19,6 @@ validation_dataset_config:
   root: *root
   vq_root: *vq_root
   subset: 'validation'
-  url: *split_path
   ext: *ext
 validation_loader_config:
   shuffle: False
@@ -30,7 +27,6 @@ test_dataset_config:
   root: *root
   vq_root: *vq_root
   subset: 'testing'
-  url: *split_path
   ext: *ext
 test_loader_config:
   shuffle: False

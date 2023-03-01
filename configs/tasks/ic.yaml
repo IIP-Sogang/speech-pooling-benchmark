@@ -47,5 +47,5 @@ random_seed: 2301235
 
 model: IntentClassificationModule
 model_config:
-  input_dim: 768
+  input_dim: *feature_dim
   num_classes: 31

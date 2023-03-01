@@ -1,4 +1,3 @@
-# 1. DataLoader
 batch_size: 512
 num_workers: 8
 
@@ -47,4 +46,4 @@ random_seed: 2301235
 # 2. Model
 model: EmotionRecognitionModule
 model_config:
-  input_dim: 768
+  input_dim: *feature_dim

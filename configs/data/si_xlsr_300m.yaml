@@ -1,28 +1,36 @@
+Null1: &ext pt
+
+Null2: &data_name voxceleb
+Null3: &root /home/voxceleb/voxceleb1_xlsr_mean
+Null4: &vq_root /home/voxceleb/voxceleb1_xlsr_vq
+Null5: &split_path iden_split.txt
+Null6: &feature_dim 1024
+
 # 1. DataLoader
 training_dataset_config:
-  data_name: 'voxceleb'
-  root: 'data/voxceleb1_xlsr_1_24'
-  vq_root: 'data/voxceleb1_xlsr_vq'
+  data_name: *data_name
+  root: *root
+  vq_root: *vq_root
   subset: 'training'
-  url: 'iden_split.txt'
-  ext: 'pt'
+  url: *split_path
+  ext: *ext
 train_loader_config:
   shuffle: True
 validation_dataset_config:
-  data_name: 'voxceleb'
-  root: 'data/voxceleb1_xlsr_1_24'
-  vq_root: 'data/voxceleb1_xlsr_vq'
+  data_name: *data_name
+  root: *root
+  vq_root: *vq_root
   subset: 'validation'
-  url: 'iden_split.txt'
-  ext: 'pt'
+  url: *split_path
+  ext: *ext
 validation_loader_config:
   shuffle: False
 test_dataset_config:
-  data_name: 'voxceleb'
-  root: 'data/voxceleb1_xlsr_1_24'
-  vq_root: 'data/voxceleb1_xlsr_vq'
+  data_name: *data_name
+  root: *root
+  vq_root: *vq_root
   subset: 'testing'
-  url: 'iden_split.txt'
-  ext: 'pt'
+  url: *split_path
+  ext: *ext
 test_loader_config:
   shuffle: False
