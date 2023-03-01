@@ -173,6 +173,7 @@ if __name__ == "__main__":
         train(config)
 
     elif args.mode == "test":
+        config['batch_size'] = 1
         test(config)
 
     # sets seeds for numpy, torch and python.random.
