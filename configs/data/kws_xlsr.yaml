@@ -1,7 +1,7 @@
 Null1: &ext pt
 
 Null2: &data_name speechcommands
-Null3: &root data
+Null3: &root /home/SpeechCommands
 Null4: &folder SpeechCommands_xlsr_mean
 Null5: &vq_folder SpeechCommands_xlsr_vq
 Null6: &url speech_commands_v0.02
