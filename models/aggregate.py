@@ -136,7 +136,8 @@ class VQWeightedAvgPool(nn.Module):
 
 class VQAvgSuperPool(nn.Module):
     """
-    Average by VQ indices.
+    Weighted Average by VQ indices.
+    If any of index from two tuples are same, merge it(divide weight).
     """
     def __init__(self) -> None:
         super().__init__()
@@ -330,6 +331,147 @@ class _VQ_OR(object):
 
     def __eq__(self, other):
         return self.x == other.x or self.y == other.y
+
+
+class VQLocalProbAvgPool(nn.Module):
+    """
+    Average by 
+    frequency of vq index in each training sample.
+    """
+    def __init__(self) -> None:
+        super().__init__()
+        
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, vq_indices:Tensor):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        vq index size should follow (Batch size, Length, 2)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        from collections import Counter
+        from itertools import groupby
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1:] # Select last layer only
+        B, N, L, D = input_feature.shape
+
+        # This enormously accelarates the groupby calculation.
+        vq_indices_x = vq_indices[:, :, 0].to(torch.int16).tolist() # (B, L)
+        vq_indices_y = vq_indices[:, :, 1].to(torch.int16).tolist()
+        
+        vq_num_x = [Counter(vq_sample) for vq_sample in vq_indices_x] # (L, )
+        vq_num_y = [Counter(vq_sample) for vq_sample in vq_indices_y]
+
+        vq_freq_x = torch.tensor([list(map(lambda index: vq_num_x[i][index], vq_indices_x[i])) for i in range(B)]) # (B, L)
+        vq_freq_y = torch.tensor([list(map(lambda index: vq_num_y[i][index], vq_indices_y[i])) for i in range(B)])
+
+        vq_factor =  1 / (vq_freq_x + vq_freq_y)
+        avg_weights = F.softmax(vq_factor.log(), dim=-1).to(input_feature.device)
+        avg_weights.unsqueeze_(1)
+        avg_weights.unsqueeze_(3)
+
+        outputs = (input_feature * avg_weights).sum(2) # Length dimension
+        outputs = outputs[:, -1, :] # Squeeze dimension
+        return outputs    
+
+
+class VQGlobalProbAvgPool(nn.Module):
+    """
+    Average by 
+    frequency of vq indices in the whole training set.
+    """
+    def __init__(self, a=0.5, freq_path='models/freq.pt') -> None:
+        super().__init__()
+        freqs = torch.load(freq_path, map_location='cpu')
+        self.global_count = freqs
+        self.global_count_x = freqs.sum(dim=1)
+        self.global_count_y = freqs.sum(dim=0)
+    
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, vq_indices:Tensor):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        vq index size should follow (Batch size, Length, 2)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        from itertools import groupby
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1:] # Select last layer only
+        B, N, L, D = input_feature.shape
+
+        # =============
+        # VQ Global Weight
+        # =============
+        vq_indices_x = vq_indices[:, :, 0].to(torch.int16).tolist() # (B, L)
+        vq_indices_y = vq_indices[:, :, 1].to(torch.int16).tolist()
+        
+        vq_freq_x = torch.tensor([list(map(lambda index: self.global_count_x[index], vq_indices_x[i])) for i in range(B)]) # (B, L)
+        vq_freq_y = torch.tensor([list(map(lambda index: self.global_count_y[index], vq_indices_y[i])) for i in range(B)])
+
+        vq_factor =  1 / (vq_freq_x + vq_freq_y)
+        avg_weights = F.softmax(vq_factor.log(), dim=-1).to(input_feature.device)
+        avg_weights.unsqueeze_(1)
+        avg_weights.unsqueeze_(3)
+
+        outputs = (input_feature * avg_weights).sum(2) # Length dimension
+        outputs = outputs[:, -1, :] # Squeeze dimension
+        return outputs
+
+
+class VQMixedProbAvgPool(nn.Module):
+    """
+    Average by 
+    (1) frequency of vq indices in the whole training set.
+    (2) frequency of vq index in each training sample.
+    """
+    def __init__(self, a=0.5, freq_path='models/freq.pt') -> None:
+        super().__init__()
+        freqs = torch.load(freq_path, map_location='cpu')
+        self.global_count = freqs
+        self.global_count_x = freqs.sum(dim=1)
+        self.global_count_y = freqs.sum(dim=0)
+
+        self.a = a
+    
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, vq_indices:Tensor):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        vq index size should follow (Batch size, Length, 2)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1:] # Select last layer only
+        B, N, L, D = input_feature.shape
+
+        vq_indices_x = vq_indices[:, :, 0].to(torch.int16).tolist() # (B, L)
+        vq_indices_y = vq_indices[:, :, 1].to(torch.int16).tolist()
+        
+        # =============
+        # VQ Local Weight
+        # =============
+        from collections import Counter
+        vq_num_x = [Counter(vq_sample) for vq_sample in vq_indices_x] # (L, )
+        vq_num_y = [Counter(vq_sample) for vq_sample in vq_indices_y]
+
+        vq_freq_local_x = torch.tensor([list(map(lambda index: vq_num_x[i][index], vq_indices_x[i])) for i in range(B)]) # (B, L)
+        vq_freq_local_y = torch.tensor([list(map(lambda index: vq_num_y[i][index], vq_indices_y[i])) for i in range(B)])
+        local_weight = 1 / (vq_freq_local_x + vq_freq_local_y)
+        local_weight = F.softmax(local_weight.log(), dim=-1).to(input_feature.device)
+        # =============
+        # VQ Global Weight
+        # =============
+        vq_freq_global_x = torch.tensor([list(map(lambda index: self.global_count_x[index], vq_indices_x[i])) for i in range(B)]) # (B, L)
+        vq_freq_global_y = torch.tensor([list(map(lambda index: self.global_count_y[index], vq_indices_y[i])) for i in range(B)])
+        global_weight = 1 / (vq_freq_global_x + vq_freq_global_y)
+        global_weight = F.softmax(global_weight.log(), dim=-1).to(input_feature.device)
+        # =============
+        # Mix
+        # =============
+        avg_weights = F.softmax(global_weight * local_weight, dim=-1)
+        avg_weights /= avg_weights.sum(dim=-1, keepdim=True)
+        avg_weights.unsqueeze_(1)
+        avg_weights.unsqueeze_(3)
+
+        outputs = (input_feature * avg_weights).sum(2) # Length dimension
+        outputs = outputs[:, -1, :] # Squeeze dimension
+        return outputs    
 
 
 class ProbWeightedAvgPool(nn.Module):
@@ -730,7 +872,11 @@ def select_method(head_type:str='avgpool', input_dim:int=768, layer_ids:Union[st
         return ProbWeightedAvgPool(a=kwargs.get('a'), freq_path=kwargs['freq_path'])
     elif head_type=='softdecay':
         return SoftDecayPooling()
-    elif head_type=='jeonko':
-        return TFSqueezePooling()
+    elif head_type=='vq_local':
+        return VQLocalProbAvgPool()
+    elif head_type=='vq_global':
+        return VQGlobalProbAvgPool(a=kwargs.get('a'), freq_path=kwargs['freq_path'])
+    elif head_type=='vq_mix':
+        return VQMixedProbAvgPool(a=kwargs.get('a'), freq_path=kwargs['freq_path'])
     else:
         assert False, f"""HEAD TYPE "{head_type}" IS NOT IMPLEMENTED!"""
