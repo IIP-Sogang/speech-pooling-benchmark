@@ -1,4 +1,3 @@
-from abc import *
 from typing import List, Optional, Tuple, Union
 from itertools import groupby
 
@@ -8,17 +7,12 @@ from torch import Tensor
 import torch.nn.functional as F
 
 
-class AvgPool(nn.Module):
-    
-    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args, **kwargs):
-        """
-        Input feature size should follow (Batch size, n_layers, Length, Dimension)
-        Return speech representation which follows (Batch size, Dimension)
-        """
-        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
-        outputs = input_feature.sum(2) / input_lengths[:,None,None]
-        return outputs
+from .modules import TDNNBlock, length_to_mask
 
+
+################################################
+# Wrapper for Pooling Methods
+################################################
 
 class SimpleAvgPool(nn.Module):
     """
@@ -34,6 +28,306 @@ class SimpleAvgPool(nn.Module):
         input_feature = input_feature[:,-1:]
         outputs = AvgPool()(input_feature, input_lengths)
         return outputs[:,0]
+
+
+class SimpleStatisticPool(nn.Module):
+    """
+    This wrapper class utilizes only the last layer of 12-layered features.
+    """
+
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args, **kwargs):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1:]
+        outputs = StatisticPooling()(input_feature, input_lengths)
+        return outputs[:,0]
+    
+
+class WhiteningBERT(nn.Module):
+    def __init__(self, layer_ids:List[int]=None, whitening=True, mean_vector_path:str=None, whiten_factor_path:str=None, normalize:str=None):
+        super().__init__()
+        print("layers", layer_ids)
+        print("whitening", whitening)
+        self.pool = AvgPool()
+        self.layer_comb = LayerCombination(layer_ids=layer_ids)
+        self.whitening = Whitening(mean_vector_path=mean_vector_path, whiten_factor_path=whiten_factor_path, normalize=normalize) if whitening else nn.Identity()
+
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args, **kwargs):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        pool_feature = self.pool(input_feature, input_lengths)
+        combined_feature = self.layer_comb(pool_feature)
+        whiten_feature = self.whitening(combined_feature)
+        return whiten_feature
+
+
+################################################
+# Pooling Tools
+################################################
+
+
+class LayerCombination(nn.Module):
+    def __init__(self, layer_ids:List[int]=None):
+        super().__init__()
+        self.layer_ids = layer_ids
+
+    def forward(self, input_feature:Tensor):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        Return speech representation which follows (Batch size, Length, Dimension)
+        """
+        combined_feature = input_feature[:,self.layer_ids].mean(1)
+        return combined_feature
+
+
+class Whitening(nn.Module):
+    def __init__(self, mean_vector_path:str=None, whiten_factor_path:str=None, normalize:str=None):
+        super().__init__()
+        self.mean_vector = torch.load(mean_vector_path)
+        self.whiten_factor = torch.load(whiten_factor_path)
+        self.normalize = normalize
+        if self.normalize is not None:
+            print(f'Normalize by {self.normalize}')
+        
+    def forward(self, input_feature:Tensor):
+        """
+        Input feature size should follow (Batch size, Dimension)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        if self.mean_vector is None:
+            self.mean_vector = input_feature.mean(dim=0, keepdim=True) # Batch mean    
+        else:
+            self.mean_vector = self.mean_vector.to(input_feature.device)
+        
+        if self.whiten_factor is None:
+            Cov = torch.mm((input_feature-self.mean_vector).T,(input_feature-self.mean_vector)) # Global mean
+            # eigval, eigvec = torch.linalg.eig(Cov)
+            # D = torch.diag(eigval ** -0.5)
+            # whiten_feature = (input_feature - m) @ eigvec @ D
+            U, S, V = torch.svd(Cov)
+            D = torch.diag(1/torch.sqrt(S))
+            self.whiten_factor = torch.mm(U,D)
+        else:
+            self.whiten_factor = self.whiten_factor.to(input_feature.device)
+        
+        whiten_feature = torch.mm(input_feature - self.mean_vector, self.whiten_factor)
+        
+        if self.normalize == 'L2':
+            return whiten_feature / torch.sum(whiten_feature**2, dim=1, keepdim=True)**0.5
+        else:
+            return whiten_feature
+    
+    def stack_feats(self, input_feature:Tensor):
+        feat_sum = input_feature.sum(dim=0)
+        self.datalen += input_feature.size(0)
+
+        if self.features is None:
+            self.features = feat_sum
+        else:
+            self.features += feat_sum
+
+    def init_stats(self):
+        self.mean_vector = self.features / self.datalen
+        self.features = None
+
+
+################################################
+# Unsupervised Pooling Methods
+################################################
+
+
+class AvgPool(nn.Module):
+    
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args, **kwargs):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        outputs = input_feature.sum(2) / input_lengths[:,None,None]
+        return outputs
+
+
+class StatisticPooling(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self.eps = 1e-5
+        self.return_mean = True
+        self.return_std = True
+        
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
+
+        B, L, _ = input_feature.shape # (Batch size, Length, Dimension)
+
+        assert input_lengths is not None, "NO Input Lengths"
+        mean = []
+        std = []
+        for snt_id in range(input_feature.shape[0]):
+            # Avoiding padded time steps
+            # actual_size = int(torch.round(input_lengths[snt_id] * input_feature.shape[1]))
+            # NOTE (JK) Fix
+            actual_size = input_lengths[snt_id]
+
+            # computing statistics
+            if self.return_mean:
+                mean.append(
+                    torch.mean(input_feature[snt_id, 0:actual_size, ...], dim=0)
+                )
+            if self.return_std:
+                std.append(torch.std(input_feature[snt_id, 0:actual_size, ...], dim=0))
+        if self.return_mean:
+            mean = torch.stack(mean)
+        if self.return_std:
+            std = torch.stack(std)
+
+        if self.return_mean:
+            gnoise = self._get_gauss_noise(mean.size(), device=mean.device)
+            gnoise = gnoise
+            mean += gnoise
+        if self.return_std:
+            std = std + self.eps
+
+        # Append mean and std of the batch
+        if self.return_mean and self.return_std:
+            pooled_stats = torch.cat((mean, std), dim=1)
+            pooled_stats = pooled_stats.unsqueeze(1)
+        elif self.return_mean:
+            pooled_stats = mean.unsqueeze(1)
+        elif self.return_std:
+            pooled_stats = std.unsqueeze(1)
+
+        return pooled_stats
+
+    def _get_gauss_noise(self, shape_of_tensor, device="cpu"):
+        """Returns a tensor of epsilon Gaussian noise.
+        Arguments
+        ---------
+        shape_of_tensor : tensor
+            It represents the size of tensor for generating Gaussian noise.
+        """
+        gnoise = torch.randn(shape_of_tensor, device=device)
+        gnoise -= torch.min(gnoise)
+        gnoise /= torch.max(gnoise)
+        gnoise = self.eps * ((1 - 9) * gnoise + 9)
+
+        return gnoise
+
+
+class SoftDecayPooling(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.layer_id= -1
+        self.pool = AvgPool()
+
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args, **kwargs):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+
+        # Follow implemetation
+        input_feature = self.pool(input_feature, input_lengths) # B, N, D
+        input_feature = input_feature[:, self.layer_id] # B, D
+
+        u,s,v = torch.svd(input_feature)
+        #=== Soft Decay ===
+        maxS = torch.max(s,dim=0).values.unsqueeze(-1)
+        eps = 1e-7
+        alpha = -0.6
+        newS = - torch.log(1 - alpha * (s + alpha)+eps) / alpha
+        #=== Rescaling ===
+        maxNewS = torch.max(newS,dim=0).values.unsqueeze(-1)
+        rescale_number = maxNewS/maxS
+        newS = newS/rescale_number
+        #=== Transform ===
+        rescale_s_dia = torch.diag_embed(newS,dim1=-2,dim2=-1)
+        output = torch.matmul(torch.matmul(u,rescale_s_dia),v.transpose(1,0))
+        return output
+
+
+        # Followed paper not implementation
+        # outputs = torch.zeros_like(input_feature)
+        # import pdb;pdb.set_trace()
+
+        # for i, single_feature in enumerate(input_feature):
+        #     u,s,v = torch.svd(single_feature.T)
+        #     #=== Soft Decay ===
+        #     maxS = torch.max(s,dim=0).values.unsqueeze(-1)
+        #     eps = 1e-7
+        #     alpha = -0.6
+        #     newS = - torch.log(1 - alpha * (s + alpha)+eps) / alpha
+        #     #=== Rescaling ===
+        #     maxNewS = torch.max(newS,dim=0).values.unsqueeze(-1)
+        #     rescale_number = maxNewS/maxS
+        #     newS = newS/rescale_number
+        #     #=== Transform ===
+        #     rescale_s_dia = torch.diag_embed(newS,dim1=-2,dim2=-1)
+        #     new_input = torch.matmul(torch.matmul(u,rescale_s_dia),v.transpose(1,0))
+        #     outputs[i] = new_input.T
+
+        # outputs = self.pool(outputs)
+        # return outputs
+
+
+class ProbWeightedAvgPool(nn.Module):
+    """
+    Average by frequency.
+    """
+    def __init__(self, a=0.5, freq_path='models/freq.pt') -> None:
+        super().__init__()
+        freqs = torch.load(freq_path, map_location='cpu')
+        probs = freqs/freqs.sum()
+        self.weight = a / (probs + a)
+    
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, vq_indices:Tensor):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        vq index size should follow (Batch size, Length, 2)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        from itertools import groupby
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1:] # Select last layer only
+        B, N, L, D = input_feature.shape
+
+        vq_indices = vq_indices.tolist() # This enormously accelarates the groupby calculation.
+        avg_weights = list()
+        # avg_weights = torch.zeros((B, L), device=input_feature.device)
+        
+        def get_prob_normalized_weight(index:Tuple):
+            index = tuple(map(int, index))
+            return self.weight[index[0], index[1]]
+        
+        for i, (vq_indices_, input_length) in enumerate(zip(vq_indices, input_lengths)):
+            # import pdb; pdb.set_trace()
+            avg_weights.append(list(map(get_prob_normalized_weight, vq_indices_[:input_length])) + [0 for _ in range(len(vq_indices_) - input_length)])
+            # for j in range(input_length):
+            #     avg_weights[i, j] = get_prob_normalized_weight(vq_indices_[j])
+            # avg_weights[i] /= avg_weights[i].sum()
+        avg_weights = torch.tensor(avg_weights, device=input_feature.device)
+        avg_weights /= avg_weights.sum(dim=-1, keepdim=True)
+        avg_weights.unsqueeze_(1)
+        avg_weights.unsqueeze_(3)
+
+        outputs = (input_feature * avg_weights).sum(2) # Length dimension
+        outputs = outputs[:, -1, :] # Squeeze dimension
+        return outputs    
+
+
+################################################
+# Unsupervised VQ Pooling Methods (Suggested)
+################################################
 
 
 class VQWeightedAvgPool(nn.Module):
@@ -520,49 +814,211 @@ class VQMixedProbAvgPool(nn.Module):
         return outputs
 
 
-class ProbWeightedAvgPool(nn.Module):
+
+################################################
+# Supervised Pooling Methods
+################################################
+
+
+class AttentiveStatisticsPooling(nn.Module):
+    """This class implements an attentive statistic pooling layer for each channel.
+    It returns the concatenated mean and std of the input tensor.
+    Arguments
+    ---------
+    channels: int
+        The number of input channels.
+    attention_channels: int
+        The number of attention channels.
+    Example
+    -------
+    >>> inp_tensor = torch.rand([8, 120, 64]).transpose(1, 2)
+    >>> asp_layer = AttentiveStatisticsPooling(64)
+    >>> lengths = torch.rand((8,))
+    >>> out_tensor = asp_layer(inp_tensor, lengths).transpose(1, 2)
+    >>> out_tensor.shape
+    torch.Size([8, 1, 128])
     """
-    Average by frequency.
-    """
-    def __init__(self, a=0.5, freq_path='models/freq.pt') -> None:
+
+    def __init__(self, channels, attention_channels=128, global_context=True):
         super().__init__()
-        freqs = torch.load(freq_path, map_location='cpu')
-        probs = freqs/freqs.sum()
-        self.weight = a / (probs + a)
-    
-    def forward(self, input_feature:Tensor, input_lengths:Tensor, vq_indices:Tensor):
-        """
-        Input feature size should follow (Batch size, n_layers, Length, Dimension)
-        vq index size should follow (Batch size, Length, 2)
-        Return speech representation which follows (Batch size, Dimension)
-        """
-        from itertools import groupby
-        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
-        input_feature = input_feature[:,-1:] # Select last layer only
-        B, N, L, D = input_feature.shape
 
-        vq_indices = vq_indices.tolist() # This enormously accelarates the groupby calculation.
-        avg_weights = list()
-        # avg_weights = torch.zeros((B, L), device=input_feature.device)
-        
-        def get_prob_normalized_weight(index:Tuple):
-            index = tuple(map(int, index))
-            return self.weight[index[0], index[1]]
-        
-        for i, (vq_indices_, input_length) in enumerate(zip(vq_indices, input_lengths)):
-            # import pdb; pdb.set_trace()
-            avg_weights.append(list(map(get_prob_normalized_weight, vq_indices_[:input_length])) + [0 for _ in range(len(vq_indices_) - input_length)])
-            # for j in range(input_length):
-            #     avg_weights[i, j] = get_prob_normalized_weight(vq_indices_[j])
-            # avg_weights[i] /= avg_weights[i].sum()
-        avg_weights = torch.tensor(avg_weights, device=input_feature.device)
-        avg_weights /= avg_weights.sum(dim=-1, keepdim=True)
-        avg_weights.unsqueeze_(1)
-        avg_weights.unsqueeze_(3)
+        self.eps = 1e-12
+        self.global_context = global_context
+        if global_context:
+            self.tdnn = TDNNBlock(channels * 3, attention_channels, 1, 1)
+        else:
+            self.tdnn = TDNNBlock(channels, attention_channels, 1, 1)
+        self.tanh = nn.Tanh()
+        self.conv = nn.Conv1d(
+            in_channels=attention_channels, out_channels=channels, kernel_size=1
+        )
 
-        outputs = (input_feature * avg_weights).sum(2) # Length dimension
-        outputs = outputs[:, -1, :] # Squeeze dimension
-        return outputs    
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args):
+        """Calculates mean and std for a batch (input tensor).
+        Arguments
+        ---------
+        x : torch.Tensor
+            Tensor of shape [N, C, L].
+        """
+        # ===========
+        # NOTE(JK) squeeze dim for our framework
+        # ===========
+        input_feature.squeeze_(1)
+        input_feature = input_feature.permute(0,2,1)
+
+        L = input_feature.shape[-1]
+
+        def _compute_statistics(input_feature, m, dim=2, eps=self.eps):
+            mean = (m * input_feature).sum(dim)
+            std = torch.sqrt(
+                (m * (input_feature - mean.unsqueeze(dim)).pow(2)).sum(dim).clamp(eps)
+            )
+            return mean, std
+
+        if input_lengths is None:
+            lengths = torch.ones(input_feature.shape[0], device=input_feature.device)
+
+        # Make binary mask of shape [N, 1, L]
+        mask = length_to_mask(input_lengths * L, max_len=L, device=input_feature.device)
+        mask = mask.unsqueeze(1)
+
+        # Expand the temporal context of the pooling layer by allowing the
+        # self-attention to look at global properties of the utterance.
+        if self.global_context:
+            # torch.std is unstable for backward computation
+            # https://github.com/pytorch/pytorch/issues/4320
+            total = mask.sum(dim=2, keepdim=True).float()
+            mean, std = _compute_statistics(input_feature, mask / total)
+            mean = mean.unsqueeze(2).repeat(1, 1, L)
+            std = std.unsqueeze(2).repeat(1, 1, L)
+            attn = torch.cat([input_feature, mean, std], dim=1)
+        else:
+            attn = input_feature
+
+        # Apply layers
+        # attn = self.conv(self.tanh(self.tdnn(attn)))
+
+        # ===========
+        # NOTE(JK) match dim for ours.
+        # ===========
+        attn = self.conv(self.tanh(self.tdnn(attn)))
+
+        # Filter out zero-paddings
+        attn = attn.masked_fill(mask == 0, float("-inf"))
+
+        attn = F.softmax(attn, dim=2)
+        mean, std = _compute_statistics(input_feature, attn)
+        # Append mean and std of the batch
+        pooled_stats = torch.cat((mean, std), dim=1)
+        pooled_stats = pooled_stats.unsqueeze(2)
+        
+        # ===========
+        # NOTE(JK) match dim for our framework
+        # ===========
+        pooled_stats = pooled_stats.squeeze(-1)
+
+        return pooled_stats
+
+
+class VectorAttentivePooling(nn.Module):
+    """This class implements an vector attentive statistic pooling layer for each channel.
+    It returns the concatenated mean and std of the input tensor.
+    Refer to 'Vector-Based Attentive Pooling for Text-Independent Speaker Verification'
+    Arguments
+    ---------
+    channels: int
+        The number of input channels.
+    attention_channels: int
+        The number of attention channels.
+    Example
+    -------
+    >>> inp_tensor = torch.rand([8, 120, 64]).transpose(1, 2)
+    >>> asp_layer = AttentiveStatisticsPooling(64)
+    >>> lengths = torch.rand((8,))
+    >>> out_tensor = asp_layer(inp_tensor, lengths).transpose(1, 2)
+    >>> out_tensor.shape
+    torch.Size([8, 1, 128])
+    """
+
+    def __init__(self, channels, attention_channels=128, n_heads=4, global_context=True):
+        super().__init__()
+
+        self.eps = 1e-12
+        self.global_context = global_context
+        if global_context:
+            self.tdnn = TDNNBlock(channels * 3, attention_channels, 1, 1)
+        else:
+            self.tdnn = TDNNBlock(channels, attention_channels, 1, 1)
+        self.tanh = nn.Tanh()
+        self.conv = nn.Conv1d(
+            in_channels=attention_channels, out_channels=channels, kernel_size=1
+        )
+
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args):
+        """Calculates mean and std for a batch (input tensor).
+        Arguments
+        ---------
+        x : torch.Tensor
+            Tensor of shape [N, C, L].
+        """
+        # ===========
+        # NOTE(JK) squeeze dim for our framework
+        # ===========
+        input_feature.squeeze_(1)
+        input_feature = input_feature.permute(0,2,1)
+
+        L = input_feature.shape[-1]
+
+        def _compute_statistics(input_feature, m, dim=2, eps=self.eps):
+            mean = (m * input_feature).sum(dim)
+            std = torch.sqrt(
+                (m * (input_feature - mean.unsqueeze(dim)).pow(2)).sum(dim).clamp(eps)
+            )
+            return mean, std
+
+        if input_lengths is None:
+            lengths = torch.ones(input_feature.shape[0], device=input_feature.device)
+
+        # Make binary mask of shape [N, 1, L]
+        mask = length_to_mask(input_lengths * L, max_len=L, device=input_feature.device)
+        mask = mask.unsqueeze(1)
+
+        # Expand the temporal context of the pooling layer by allowing the
+        # self-attention to look at global properties of the utterance.
+        if self.global_context:
+            # torch.std is unstable for backward computation
+            # https://github.com/pytorch/pytorch/issues/4320
+            total = mask.sum(dim=2, keepdim=True).float()
+            mean, std = _compute_statistics(input_feature, mask / total)
+            mean = mean.unsqueeze(2).repeat(1, 1, L)
+            std = std.unsqueeze(2).repeat(1, 1, L)
+            attn = torch.cat([input_feature, mean, std], dim=1)
+        else:
+            attn = input_feature
+
+        # Apply layers
+        # attn = self.conv(self.tanh(self.tdnn(attn)))
+
+        # ===========
+        # NOTE(JK) match dim for ours.
+        # ===========
+        attn = self.conv(self.tanh(self.tdnn(attn)))
+
+        # Filter out zero-paddings
+        attn = attn.masked_fill(mask == 0, float("-inf"))
+
+        attn = F.softmax(attn, dim=2)
+        mean, std = _compute_statistics(input_feature, attn)
+        # Append mean and std of the batch
+        pooled_stats = torch.cat((mean, std), dim=1)
+        pooled_stats = pooled_stats.unsqueeze(2)
+        
+        # ===========
+        # NOTE(JK) match dim for our framework
+        # ===========
+        pooled_stats = pooled_stats.squeeze(-1)
+
+        return pooled_stats
 
 
 class SelfAttentivePooling(nn.Module):
@@ -593,6 +1049,7 @@ class SelfAttentivePooling(nn.Module):
         feature = torch.sum(input_feature * w, dim=1) 
 
         return feature
+
 
 class SelfAttentiveMaskingPooling(nn.Module):
     def __init__(self, input_dim:int = 768):
@@ -627,7 +1084,7 @@ class SelfAttentiveMaskingPooling(nn.Module):
         feature = torch.sum(input_feature * w, dim=1) 
 
         return feature
-    
+
 
 class VQOneHotAttentivePooling(nn.Module):
     """
@@ -684,207 +1141,7 @@ class VQOneHotAttentivePooling(nn.Module):
         outputs = torch.bmm(attention_weights, value) # (B, L, L) x (B, L, D) -> (B, L, D)
 
         return outputs.sum(1)
-    
-    
-    
-class XVector(nn.Module):
-    def __init__(self, input_dim = 40, num_classes=8):
-        super(XVector, self).__init__()
-        from models.tasks.asv.tdnn import TDNN
 
-        self.tdnn1 = TDNN(input_dim=input_dim, output_dim=512, context_size=5, dilation=1,dropout_p=0.5)
-        self.tdnn2 = TDNN(input_dim=512, output_dim=512, context_size=3, dilation=1,dropout_p=0.5)
-        self.tdnn3 = TDNN(input_dim=512, output_dim=512, context_size=2, dilation=2,dropout_p=0.5)
-        self.tdnn4 = TDNN(input_dim=512, output_dim=512, context_size=1, dilation=1,dropout_p=0.5)
-        self.tdnn5 = TDNN(input_dim=512, output_dim=512, context_size=1, dilation=3,dropout_p=0.5)
-        #### Frame levelPooling
-        self.segment6 = nn.Linear(1024, 512)
-        self.segment7 = nn.Linear(512, 512)
-        self.output = nn.Linear(512, num_classes)
-
-    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args):
-        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
-        
-        import pdb; pdb.set_trace()
-        input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
-        
-        tdnn1_out = self.tdnn1(input_feature)
-        tdnn2_out = self.tdnn2(tdnn1_out)
-        tdnn3_out = self.tdnn3(tdnn2_out)
-        tdnn4_out = self.tdnn4(tdnn3_out)
-        tdnn5_out = self.tdnn5(tdnn4_out)
-
-        ### Stat Pool
-        mean = torch.mean(tdnn5_out,1)
-        std = torch.std(tdnn5_out,1)
-        stat_pooling = torch.cat((mean,std),1)
-        segment6_out = self.segment6(stat_pooling)
-        x_vec = self.segment7(segment6_out)
-
-        return x_vec
-
-
-
-
-class WhiteningBERT(nn.Module):
-    def __init__(self, layer_ids:List[int]=None, whitening=True, mean_vector_path:str=None, whiten_factor_path:str=None, normalize:str=None):
-        super().__init__()
-        print("layers", layer_ids)
-        print("whitening", whitening)
-        self.pool = AvgPool()
-        self.layer_comb = LayerCombination(layer_ids=layer_ids)
-        self.whitening = Whitening(mean_vector_path=mean_vector_path, whiten_factor_path=whiten_factor_path, normalize=normalize) if whitening else nn.Identity()
-
-    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args, **kwargs):
-        """
-        Input feature size should follow (Batch size, n_layers, Length, Dimension)
-        Return speech representation which follows (Batch size, Dimension)
-        """
-        pool_feature = self.pool(input_feature, input_lengths)
-        combined_feature = self.layer_comb(pool_feature)
-        whiten_feature = self.whitening(combined_feature)
-        return whiten_feature
-
-
-class LayerCombination(nn.Module):
-    def __init__(self, layer_ids:List[int]=None):
-        super().__init__()
-        self.layer_ids = layer_ids
-
-    def forward(self, input_feature:Tensor):
-        """
-        Input feature size should follow (Batch size, n_layers, Length, Dimension)
-        Return speech representation which follows (Batch size, Length, Dimension)
-        """
-        combined_feature = input_feature[:,self.layer_ids].mean(1)
-        return combined_feature
-
-
-class Whitening(nn.Module):
-    def __init__(self, mean_vector_path:str=None, whiten_factor_path:str=None, normalize:str=None):
-        super().__init__()
-        self.mean_vector = torch.load(mean_vector_path)
-        self.whiten_factor = torch.load(whiten_factor_path)
-        self.normalize = normalize
-        if self.normalize is not None:
-            print(f'Normalize by {self.normalize}')
-        
-    def forward(self, input_feature:Tensor):
-        """
-        Input feature size should follow (Batch size, Dimension)
-        Return speech representation which follows (Batch size, Dimension)
-        """
-        if self.mean_vector is None:
-            self.mean_vector = input_feature.mean(dim=0, keepdim=True) # Batch mean    
-        else:
-            self.mean_vector = self.mean_vector.to(input_feature.device)
-        
-        if self.whiten_factor is None:
-            Cov = torch.mm((input_feature-self.mean_vector).T,(input_feature-self.mean_vector)) # Global mean
-            # eigval, eigvec = torch.linalg.eig(Cov)
-            # D = torch.diag(eigval ** -0.5)
-            # whiten_feature = (input_feature - m) @ eigvec @ D
-            U, S, V = torch.svd(Cov)
-            D = torch.diag(1/torch.sqrt(S))
-            self.whiten_factor = torch.mm(U,D)
-        else:
-            self.whiten_factor = self.whiten_factor.to(input_feature.device)
-        
-        whiten_feature = torch.mm(input_feature - self.mean_vector, self.whiten_factor)
-        
-        if self.normalize == 'L2':
-            return whiten_feature / torch.sum(whiten_feature**2, dim=1, keepdim=True)**0.5
-        else:
-            return whiten_feature
-    
-    def stack_feats(self, input_feature:Tensor):
-        feat_sum = input_feature.sum(dim=0)
-        self.datalen += input_feature.size(0)
-
-        if self.features is None:
-            self.features = feat_sum
-        else:
-            self.features += feat_sum
-
-    def init_stats(self):
-        self.mean_vector = self.features / self.datalen
-        self.features = None
-
-
-class SoftDecayPooling(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.layer_id= -1
-        self.pool = AvgPool()
-
-    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args, **kwargs):
-        """
-        Input feature size should follow (Batch size, n_layers, Length, Dimension)
-        Return speech representation which follows (Batch size, Dimension)
-        """
-
-        # Follow implemetation
-        input_feature = self.pool(input_feature, input_lengths) # B, N, D
-        input_feature = input_feature[:, self.layer_id] # B, D
-
-        u,s,v = torch.svd(input_feature)
-        #=== Soft Decay ===
-        maxS = torch.max(s,dim=0).values.unsqueeze(-1)
-        eps = 1e-7
-        alpha = -0.6
-        newS = - torch.log(1 - alpha * (s + alpha)+eps) / alpha
-        #=== Rescaling ===
-        maxNewS = torch.max(newS,dim=0).values.unsqueeze(-1)
-        rescale_number = maxNewS/maxS
-        newS = newS/rescale_number
-        #=== Transform ===
-        rescale_s_dia = torch.diag_embed(newS,dim1=-2,dim2=-1)
-        output = torch.matmul(torch.matmul(u,rescale_s_dia),v.transpose(1,0))
-        return output
-
-
-        # Followed paper not implementation
-        # outputs = torch.zeros_like(input_feature)
-        # import pdb;pdb.set_trace()
-
-        # for i, single_feature in enumerate(input_feature):
-        #     u,s,v = torch.svd(single_feature.T)
-        #     #=== Soft Decay ===
-        #     maxS = torch.max(s,dim=0).values.unsqueeze(-1)
-        #     eps = 1e-7
-        #     alpha = -0.6
-        #     newS = - torch.log(1 - alpha * (s + alpha)+eps) / alpha
-        #     #=== Rescaling ===
-        #     maxNewS = torch.max(newS,dim=0).values.unsqueeze(-1)
-        #     rescale_number = maxNewS/maxS
-        #     newS = newS/rescale_number
-        #     #=== Transform ===
-        #     rescale_s_dia = torch.diag_embed(newS,dim1=-2,dim2=-1)
-        #     new_input = torch.matmul(torch.matmul(u,rescale_s_dia),v.transpose(1,0))
-        #     outputs[i] = new_input.T
-
-        # outputs = self.pool(outputs)
-        # return outputs
-
-
-class TFSqueezePooling(nn.Module):
-    def __init__(self, n_dim:int=786, n_temporal:int=6) -> None:
-        super().__init__()
-        assert n_dim % n_temporal == 0, "n_dim should be divisible by n_temporal"
-        self.layer_id= -1
-        self.n_temporal = n_temporal
-        self.avg_len = n_dim % self.n_temporal
-
-    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args, **kwargs):
-        """
-        Input feature size should follow (Batch size, n_layers, Length, Dimension)
-        Return speech representation which follows (Batch size, Dimension)
-        """
-        input_feature = input_feature[:, -1]
-        time_squeezed_feature = torch.cat([input_feature[:,i*self.avg_len:(i+1)*self.avg_len].mean(1, keepdim=True) for i in range(self.n_temporal)], dim=1)
-        dim_squeezed_feature = torch.cat([time_squeezed_feature[:,:,i*self.n_temporal:(i+1)*self.n_temporal].mean(-1, keepdim=True) for i in range(int(input_feature.size(-1)/self.n_temporal))], dim=-1)
-        squeezed_feature = dim_squeezed_feature.flatten(start_dim=1, end_dim=2) # B, D
-        return squeezed_feature
 
 
 def select_method(head_type:str='avgpool', input_dim:int=768, layer_ids:Union[str,List[int],int]="1 12", **kwargs):
@@ -897,13 +1154,14 @@ def select_method(head_type:str='avgpool', input_dim:int=768, layer_ids:Union[st
 
     if head_type=='avgpool':
         return SimpleAvgPool()
+    elif head_type=='statistic':
+        return SimpleStatisticPool()
     elif head_type=='sap':
         return SelfAttentivePooling(input_dim)
-    elif head_type=='x_vec':
-        print( kwargs)
-        return XVector(input_dim = input_dim, num_classes = 1211)
     elif head_type=='sap_mask':
         return SelfAttentiveMaskingPooling(input_dim)
+    elif head_type=='asp':
+        return AttentiveStatisticsPooling(channels=input_dim)
     elif head_type=='white':
         return WhiteningBERT(layer_ids=layer_ids, whitening=kwargs['whitening'], mean_vector_path=kwargs['mean_vector_path'], whiten_factor_path=kwargs['whiten_factor_path'])
     elif head_type=='vq':
