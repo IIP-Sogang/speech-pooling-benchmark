@@ -1049,6 +1049,21 @@ class SelfAttentivePooling(nn.Module):
         feature = torch.sum(input_feature * w, dim=1) 
 
         return feature
+    
+    def get_weight(self, input_feature:Tensor, input_lengths:Tensor, *args):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
+
+        B, L, _ = input_feature.shape # (Batch size, Length, Dimension)
+
+        h = torch.tanh(self.sap_linear(input_feature)) # (Batch size, Length, Dimension)
+        w = torch.matmul(h, self.attention).squeeze(dim=2) # (Batch size, Length)
+        w = F.softmax(w, dim=1).view(B, L, 1) # 
+        return w
 
 
 class SelfAttentiveMaskingPooling(nn.Module):
@@ -1084,6 +1099,26 @@ class SelfAttentiveMaskingPooling(nn.Module):
         feature = torch.sum(input_feature * w, dim=1) 
 
         return feature
+    
+    def get_weight(self, input_feature:Tensor, input_lengths:Tensor, *args):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
+
+        B, L, _ = input_feature.shape # (Batch size, Length, Dimension)
+
+        h = torch.tanh(self.sap_linear(input_feature)) # (Batch size, Length, Dimension)
+        w = torch.matmul(h, self.attention).squeeze(dim=2) # (Batch size, Length)
+
+        # If length = 2, mask = [[1, 1, 0, 0, 0, ...]]
+        mask = torch.arange(L).expand(B, L).to(w.device) < input_lengths[:,None] # result : (Batch size, Length)
+        w = w + (~mask) * (w.min() - 20)
+
+        w = F.softmax(w, dim=1).view(B, L, 1).squeeze(-1) # 
+        return w
 
 
 class VQOneHotAttentivePooling(nn.Module):

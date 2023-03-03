@@ -2,7 +2,7 @@ import os
 import re
 import glob
 from pathlib import Path
-from typing import Tuple, Union, Optional
+from typing import List, Tuple, Union, Optional
 
 import torch
 import torch.nn as nn

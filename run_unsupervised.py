@@ -3,12 +3,14 @@ from typing import List, Literal, Tuple, Union
 import pandas as pd
 
 from dataloader.utils import load_dataset
-from models.aggregate import VQWeightedAvgPool, SimpleAvgPool, VQAvgSuperPool, ProbWeightedAvgPool, SoftDecayPooling, WhiteningBERT, VQSqueezedAvgPool
+from models.aggregate import SimpleStatisticPool, VQGlobalProbAvgPool, VQMixedProbAvgPool, VQWeightedAvgPool, SimpleAvgPool, VQAvgSuperPool, ProbWeightedAvgPool, SoftDecayPooling, WhiteningBERT, VQSqueezedAvgPool, VQLocalProbAvgPool
 
 import torch
 from torch.utils.data import Dataset, DataLoader
 from dataloader.utils import load_dataset
 
+
+CONCAT_METHODS = ['statistic','asp','vap']
 
 ##========================
 ## Load DataLoader
@@ -79,7 +81,8 @@ def load_extracted_feature_dict(dir_tag:str='1_12', vq_dir_tag:str='vq')->dict:
 
     from copy import deepcopy
 
-    session_num = [] #[1,2,3,4,5]
+    session_num = [1,2,3,4,5]
+    # session_num = []
 
     for except_session in range(len(session_num)):
         sessions = deepcopy(session_num)
@@ -141,21 +144,26 @@ def load_prob_models(data_tag:str='fluent', feature_tag:str='wav2vec2_base', pro
 ## =====================
 def load_model_dict(data_tags:List[str]= list(), feature_tag:str = 'wav2vec2_base', tail:str='')->Tuple[dict, dict]:
     models = dict(
-        avg = SimpleAvgPool(),
-        softdecay = SoftDecayPooling(),
-        vq_ex = VQWeightedAvgPool(shrink='exact'),
-        vq_or = VQWeightedAvgPool(shrink='or'),
-        vq_sq = VQSqueezedAvgPool(),
-        vq_chain = VQAvgSuperPool()
+        # avg = SimpleAvgPool(),
+        statistic = SimpleStatisticPool(),
+        # softdecay = SoftDecayPooling(),
+        # vq_ex = VQWeightedAvgPool(shrink='exact'),
+        # vq_or = VQWeightedAvgPool(shrink='or'),
+        # vq_sq = VQSqueezedAvgPool(),
+        # vq_chain = VQAvgSuperPool(),
+        # vq_local = VQLocalProbAvgPool(),
     )
     
     data_depedent_models = {}
     for data_tag in data_tags:
         data_depedent_models[data_tag] = {}
-        data_depedent_models[data_tag]['white'] = WhiteningBERT([-1], True, f'./models/stats/{data_tag}/mean_{feature_tag}{"_"+tail if tail else ""}.pt', 
-                                                                f'./models/stats/{data_tag}/white_{feature_tag}{"_"+tail if tail else ""}.pt', normalize='L2')
-        prob_models = load_prob_models(data_tag, feature_tag, probs=[0.00001, 0.0001, 0.001, 0.01, 0.1])
-        data_depedent_models[data_tag].update(prob_models)
+        # data_depedent_models[data_tag]['white'] = WhiteningBERT([-1], True, f'./models/stats/{data_tag}/mean_{feature_tag}{"_"+tail if tail else ""}.pt', 
+        #                                                         f'./models/stats/{data_tag}/white_{feature_tag}{"_"+tail if tail else ""}.pt', normalize='L2')
+        # data_depedent_models[data_tag]['vq_global'] = VQGlobalProbAvgPool(freq_path=f'models/stats/{data_tag}/freq_{feature_tag}.pt')
+        # data_depedent_models[data_tag]['vq_mix'] = VQMixedProbAvgPool(a=0.5, freq_path=f'models/stats/{data_tag}/freq_{feature_tag}.pt')
+        
+        # prob_models = load_prob_models(data_tag, feature_tag, probs=[0.00001, 0.0001, 0.001, 0.01, 0.1])
+        # data_depedent_models[data_tag].update(prob_models)
         
     return models, data_depedent_models
 
@@ -179,7 +187,10 @@ def train(dataloaders:dict, models:dict, data_dependent_models:dict,
         
         f_dim = dataloader.dataset[0][0].size(-1) # 768
         
-        annoy_dict = {key:(AnnoyIndex(f_dim, option), list()) for key in _models.keys()}
+        annoy_dict = {}
+        for key in _models.keys():
+            f_dim_ = f_dim * 2 if key in CONCAT_METHODS else f_dim # For Concat methods
+            annoy_dict[key] = (AnnoyIndex(f_dim_, option), list())
 
         for i, batch in tqdm.tqdm(enumerate(dataloader)):
             feature, length, vq, label = batch
@@ -214,7 +225,8 @@ def test(dataloaders:dict, models:dict, data_dependent_models:dict, option:str='
         f_dim = dataloader.dataset[0][0].size(-1) # 768
         for key in _models.keys():
             print(f'{head}_{task}_{key} Testing Start')
-            an_idx = AnnoyIndex(f_dim, 'angular')
+            f_dim_ = f_dim * 2 if key in CONCAT_METHODS else f_dim # For Concat methods
+            an_idx = AnnoyIndex(f_dim_, 'angular')
             if not os.path.exists(f'{dir}/{head}_{task}_{key}_tree.ann'): 
                 print(f'{dir}/{head}_{task}_{key}_tree.ann Does not exist. Pass it.')
                 continue
@@ -229,6 +241,7 @@ def test(dataloaders:dict, models:dict, data_dependent_models:dict, option:str='
                 # feature, length, label = batch
                 # vq = None
 
+                import pdb;pdb.set_trace()
                 outputs = _models[key](feature, length, vq).squeeze()
                 neareset_index = an_idx.get_nns_by_vector(outputs, 1)[0]
                 if labels[neareset_index] == label:
@@ -250,6 +263,7 @@ if __name__ == "__main__":
     parser.add_argument('--tail', type=str, default='mean')
     parser.add_argument('--vq_tail', type=str, default='vq')
     parser.add_argument('--mode', type=str, default='both', help='train | test | both')
+    parser.add_argument('--data', type=str, default='', help='speechcommands | voxceleb | fluent | ')
     args = parser.parse_args()
 
     dataloaders = load_extracted_feature_dict('_'.join([args.upstream,args.tail]), '_'.join([args.upstream,args.vq_tail]))
