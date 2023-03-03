@@ -13,8 +13,12 @@ from models.tasks.absract import TaskDependentModule
 class SimpleClassificationModule(TaskDependentModule):
     def __init__(self, input_dim:int = 768, num_classes:int = 26, head_type='avgpool', **kwargs) -> None:
         super().__init__()
-        self.head = select_method(head_type, **kwargs)
-        self.linear = SimpleLinear(input_dim, num_classes)
+        self.head = select_method(head_type, input_dim=input_dim, **kwargs)
+        if kwargs.get('is_concatenated', False):
+            print("Connecting Pooling layer concatenating representations, while doubling the input dimensions.")
+            self.linear = SimpleLinear(input_dim * 2, num_classes)
+        else:
+            self.linear = SimpleLinear(input_dim, num_classes)
 
     def forward(self, inputs, input_lengths, *args) -> Tensor:
         speech_representation = self.head(inputs, input_lengths, *args)
