@@ -1,4 +1,4 @@
   head_type: 'v_asp'
-  attention_channels: *feature_dim
+  attention_channels: 128
   global_context: False
   is_concatenated: True
