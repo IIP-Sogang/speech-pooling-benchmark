@@ -4,7 +4,7 @@ Null2: &data_name voxceleb
 Null3: &root /home/voxceleb/voxceleb1_wav2vec2_base_mean
 Null4: &vq_root /home/voxceleb/voxceleb1_wav2vec2_base_vq
 Null5: &split_path iden_split.txt
-Null6: &feature_dim 1024
+Null6: &feature_dim 768
 
 # 1. DataLoader
 training_dataset_config:
