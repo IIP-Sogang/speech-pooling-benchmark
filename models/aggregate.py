@@ -847,7 +847,6 @@ class AttentiveStatisticsPooling(nn.Module):
         # NOTE(JK) squeeze dim for our framework
         # ===========
         # input_feature: [B, Layers, L, C], Layers = 1
-        import pdb;pdb.set_trace()
         input_feature.squeeze_(1) # [B, L, C]
         input_feature = input_feature.permute(0,2,1)  # [B, C, L]
 
@@ -917,7 +916,6 @@ class VectorAttentivePooling(nn.Module):
         # ===========
         # NOTE(JK) squeeze dim for our framework
         # ===========
-        import pdb;pdb.set_trace()
         # input_feature: [B, Layer, L, C]
         input_feature.squeeze_(1)
         input_feature = input_feature.permute(0,2,1) # [B, C, L]
