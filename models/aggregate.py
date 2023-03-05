@@ -821,37 +821,20 @@ class VQMixedProbAvgPool(nn.Module):
 
 
 class AttentiveStatisticsPooling(nn.Module):
-    """This class implements an attentive statistic pooling layer for each channel.
-    It returns the concatenated mean and std of the input tensor.
-    Arguments
-    ---------
-    channels: int
-        The number of input channels.
-    attention_channels: int
-        The number of attention channels.
-    Example
-    -------
-    >>> inp_tensor = torch.rand([8, 120, 64]).transpose(1, 2)
-    >>> asp_layer = AttentiveStatisticsPooling(64)
-    >>> lengths = torch.rand((8,))
-    >>> out_tensor = asp_layer(inp_tensor, lengths).transpose(1, 2)
-    >>> out_tensor.shape
-    torch.Size([8, 1, 128])
-    """
-
-    def __init__(self, channels, attention_channels=128, global_context=True):
+    def __init__(self, channels):
         super().__init__()
 
         self.eps = 1e-12
-        self.global_context = global_context
-        if global_context:
-            self.tdnn = TDNNBlock(channels * 3, attention_channels, 1, 1)
-        else:
-            self.tdnn = TDNNBlock(channels, attention_channels, 1, 1)
+
+        self.conv = nn.Conv1d(in_channels=channels, out_channels=channels, kernel_size=1) # FC
         self.tanh = nn.Tanh()
-        self.conv = nn.Conv1d(
-            in_channels=attention_channels, out_channels=channels, kernel_size=1
-        )
+        self.attention = self.new_parameter(channels, 1) # v
+
+    def new_parameter(self, *size):
+        out = nn.Parameter(torch.FloatTensor(*size))
+        nn.init.xavier_normal_(out)
+        return out
+
 
     def forward(self, input_feature:Tensor, input_lengths:Tensor, *args):
         """Calculates mean and std for a batch (input tensor).
@@ -863,37 +846,24 @@ class AttentiveStatisticsPooling(nn.Module):
         # ===========
         # NOTE(JK) squeeze dim for our framework
         # ===========
-        input_feature.squeeze_(1)
-        input_feature = input_feature.permute(0,2,1)
+        # input_feature: [B, Layers, L, C], Layers = 1
+        import pdb;pdb.set_trace()
+        input_feature.squeeze_(1) # [B, L, C]
+        input_feature = input_feature.permute(0,2,1)  # [B, C, L]
 
         L = input_feature.shape[-1]
-
-        def _compute_statistics(input_feature, m, dim=2, eps=self.eps):
-            mean = (m * input_feature).sum(dim)
-            std = torch.sqrt(
-                (m * (input_feature - mean.unsqueeze(dim)).pow(2)).sum(dim).clamp(eps)
-            )
-            return mean, std
 
         if input_lengths is None:
             lengths = torch.ones(input_feature.shape[0], device=input_feature.device)
 
         # Make binary mask of shape [N, 1, L]
-        mask = length_to_mask(input_lengths * L, max_len=L, device=input_feature.device)
-        mask = mask.unsqueeze(1)
+        mask = length_to_mask(input_lengths * L, max_len=L, device=input_feature.device) # [B, L]
+        mask = mask.unsqueeze(1) # [B, 1, L]
 
         # Expand the temporal context of the pooling layer by allowing the
         # self-attention to look at global properties of the utterance.
-        if self.global_context:
-            # torch.std is unstable for backward computation
-            # https://github.com/pytorch/pytorch/issues/4320
-            total = mask.sum(dim=2, keepdim=True).float()
-            mean, std = _compute_statistics(input_feature, mask / total)
-            mean = mean.unsqueeze(2).repeat(1, 1, L)
-            std = std.unsqueeze(2).repeat(1, 1, L)
-            attn = torch.cat([input_feature, mean, std], dim=1)
-        else:
-            attn = input_feature
+
+        attn = input_feature # [B, C, L]
 
         # Apply layers
         # attn = self.conv(self.tanh(self.tdnn(attn)))
@@ -901,56 +871,39 @@ class AttentiveStatisticsPooling(nn.Module):
         # ===========
         # NOTE(JK) match dim for ours.
         # ===========
-        attn = self.conv(self.tanh(self.tdnn(attn)))
+        attn = self.tanh(self.conv(attn)) # [B, C, L]
+
+        attn = attn.permute(0,2,1) # [B, L, C]
+        attn = torch.matmul(attn, self.attention) # [B, L, 1]
+        attn = attn.permute(0,2,1) # [B, 1, L] # for masked_fill
 
         # Filter out zero-paddings
-        attn = attn.masked_fill(mask == 0, float("-inf"))
+        attn = attn.masked_fill(mask == 0, float("-inf")) # [B, 1, L]
 
-        attn = F.softmax(attn, dim=2)
-        mean, std = _compute_statistics(input_feature, attn)
-        # Append mean and std of the batch
-        pooled_stats = torch.cat((mean, std), dim=1)
-        pooled_stats = pooled_stats.unsqueeze(2)
+        # compute weights
+        attn = F.softmax(attn, dim=2) # [B, 1, L]
         
-        # ===========
-        # NOTE(JK) match dim for our framework
-        # ===========
-        pooled_stats = pooled_stats.squeeze(-1)
+        mean = torch.sum(input_feature * attn, dim=2) # [B, C]
+        std = torch.sqrt( ( torch.sum((input_feature**2) * attn, dim=2) - mean**2 ).clamp(min=1e-5) )
+
+        # Append mean and std of the batch
+        pooled_stats = torch.cat((mean, std), dim=1) # [B, 2C]
 
         return pooled_stats
 
 
 class VectorAttentivePooling(nn.Module):
-    """This class implements an vector attentive statistic pooling layer for each channel.
-    It returns the concatenated mean and std of the input tensor.
-    Refer to 'Vector-Based Attentive Pooling for Text-Independent Speaker Verification'
-    Arguments
-    ---------
-    channels: int
-        The number of input channels.
-    attention_channels: int
-        The number of attention channels.
-    Example
-    -------
-    >>> inp_tensor = torch.rand([8, 120, 64]).transpose(1, 2)
-    >>> asp_layer = AttentiveStatisticsPooling(64)
-    >>> lengths = torch.rand((8,))
-    >>> out_tensor = asp_layer(inp_tensor, lengths).transpose(1, 2)
-    >>> out_tensor.shape
-    torch.Size([8, 1, 128])
-    """
-
-    def __init__(self, channels, attention_channels=128, n_heads=4, global_context=True):
+    def __init__(self, channels, attention_channels=768, global_context=False):
         super().__init__()
 
         self.eps = 1e-12
         self.global_context = global_context
         if global_context:
-            self.tdnn = TDNNBlock(channels * 3, attention_channels, 1, 1)
+            self.conv_1 = nn.Conv1d(channels * 3, attention_channels, kernel_size=1)
         else:
-            self.tdnn = TDNNBlock(channels, attention_channels, 1, 1)
+            self.conv_1 = nn.Conv1d(channels, attention_channels, kernel_size=1)
         self.tanh = nn.Tanh()
-        self.conv = nn.Conv1d(
+        self.conv_2 = nn.Conv1d(
             in_channels=attention_channels, out_channels=channels, kernel_size=1
         )
 
@@ -964,8 +917,10 @@ class VectorAttentivePooling(nn.Module):
         # ===========
         # NOTE(JK) squeeze dim for our framework
         # ===========
+        import pdb;pdb.set_trace()
+        # input_feature: [B, Layer, L, C]
         input_feature.squeeze_(1)
-        input_feature = input_feature.permute(0,2,1)
+        input_feature = input_feature.permute(0,2,1) # [B, C, L]
 
         L = input_feature.shape[-1]
 
@@ -980,12 +935,12 @@ class VectorAttentivePooling(nn.Module):
             lengths = torch.ones(input_feature.shape[0], device=input_feature.device)
 
         # Make binary mask of shape [N, 1, L]
-        mask = length_to_mask(input_lengths * L, max_len=L, device=input_feature.device)
-        mask = mask.unsqueeze(1)
+        mask = length_to_mask(input_lengths * L, max_len=L, device=input_feature.device) # [B, L]
+        mask = mask.unsqueeze(1) # [B, 1, L]
 
         # Expand the temporal context of the pooling layer by allowing the
         # self-attention to look at global properties of the utterance.
-        if self.global_context:
+        if self.global_context: # False
             # torch.std is unstable for backward computation
             # https://github.com/pytorch/pytorch/issues/4320
             total = mask.sum(dim=2, keepdim=True).float()
@@ -1002,23 +957,22 @@ class VectorAttentivePooling(nn.Module):
         # ===========
         # NOTE(JK) match dim for ours.
         # ===========
-        attn = self.conv(self.tanh(self.tdnn(attn)))
+        attn = self.conv_2(self.tanh(self.conv_1(attn)))
+        # self.conv_1(attn)).shape : [B, C, L]
+        # self.conv_2(self.tanh(self.conv_1(attn))).shape : [B, C, L]
 
         # Filter out zero-paddings
         attn = attn.masked_fill(mask == 0, float("-inf"))
 
-        attn = F.softmax(attn, dim=2)
+        attn = F.softmax(attn, dim=2) # [B, C, L]
         mean, std = _compute_statistics(input_feature, attn)
-        # Append mean and std of the batch
-        pooled_stats = torch.cat((mean, std), dim=1)
-        pooled_stats = pooled_stats.unsqueeze(2)
-        
-        # ===========
-        # NOTE(JK) match dim for our framework
-        # ===========
-        pooled_stats = pooled_stats.squeeze(-1)
+        # mean.shape : [B, C]
+        # std.shape : [B, C]
 
-        return pooled_stats
+        # Append mean and std of the batch
+        pooled_stats = torch.cat((mean, std), dim=1) # [B, 2C]
+
+        return pooled_stats # [B, 2C]
 
 
 class SelfAttentivePooling(nn.Module):
@@ -1049,21 +1003,6 @@ class SelfAttentivePooling(nn.Module):
         feature = torch.sum(input_feature * w, dim=1) 
 
         return feature
-    
-    def get_weight(self, input_feature:Tensor, input_lengths:Tensor, *args):
-        """
-        Input feature size should follow (Batch size, n_layers, Length, Dimension)
-        Return speech representation which follows (Batch size, Dimension)
-        """
-        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
-        input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
-
-        B, L, _ = input_feature.shape # (Batch size, Length, Dimension)
-
-        h = torch.tanh(self.sap_linear(input_feature)) # (Batch size, Length, Dimension)
-        w = torch.matmul(h, self.attention).squeeze(dim=2) # (Batch size, Length)
-        w = F.softmax(w, dim=1).view(B, L, 1) # 
-        return w
 
 
 class SelfAttentiveMaskingPooling(nn.Module):
@@ -1099,26 +1038,6 @@ class SelfAttentiveMaskingPooling(nn.Module):
         feature = torch.sum(input_feature * w, dim=1) 
 
         return feature
-    
-    def get_weight(self, input_feature:Tensor, input_lengths:Tensor, *args):
-        """
-        Input feature size should follow (Batch size, n_layers, Length, Dimension)
-        Return speech representation which follows (Batch size, Dimension)
-        """
-        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
-        input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
-
-        B, L, _ = input_feature.shape # (Batch size, Length, Dimension)
-
-        h = torch.tanh(self.sap_linear(input_feature)) # (Batch size, Length, Dimension)
-        w = torch.matmul(h, self.attention).squeeze(dim=2) # (Batch size, Length)
-
-        # If length = 2, mask = [[1, 1, 0, 0, 0, ...]]
-        mask = torch.arange(L).expand(B, L).to(w.device) < input_lengths[:,None] # result : (Batch size, Length)
-        w = w + (~mask) * (w.min() - 20)
-
-        w = F.softmax(w, dim=1).view(B, L, 1).squeeze(-1) # 
-        return w
 
 
 class VQOneHotAttentivePooling(nn.Module):
@@ -1197,6 +1116,8 @@ def select_method(head_type:str='avgpool', input_dim:int=768, layer_ids:Union[st
         return SelfAttentiveMaskingPooling(input_dim)
     elif head_type=='asp':
         return AttentiveStatisticsPooling(channels=input_dim)
+    elif head_type=='v_asp':
+        return VectorAttentivePooling(channels=input_dim, attention_channels=kwargs['attention_channels'], global_context=kwargs['global_context'])
     elif head_type=='white':
         return WhiteningBERT(layer_ids=layer_ids, whitening=kwargs['whitening'], mean_vector_path=kwargs['mean_vector_path'], whiten_factor_path=kwargs['whiten_factor_path'])
     elif head_type=='vq':
