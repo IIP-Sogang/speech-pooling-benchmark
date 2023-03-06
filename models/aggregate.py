@@ -323,6 +323,36 @@ class ProbWeightedAvgPool(nn.Module):
         outputs = (input_feature * avg_weights).sum(2) # Length dimension
         outputs = outputs[:, -1, :] # Squeeze dimension
         return outputs    
+    
+    def get_weight(self, input_feature:Tensor, input_lengths:Tensor, vq_indices:Tensor):
+        """
+        Input feature size should follow (Batch size, n_layers, Length, Dimension)
+        vq index size should follow (Batch size, Length, 2)
+        Return speech representation which follows (Batch size, Dimension)
+        """
+        from itertools import groupby
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1:] # Select last layer only
+        B, N, L, D = input_feature.shape
+
+        vq_indices = vq_indices.tolist() # This enormously accelarates the groupby calculation.
+        avg_weights = list()
+        # avg_weights = torch.zeros((B, L), device=input_feature.device)
+        
+        def get_prob_normalized_weight(index:Tuple):
+            index = tuple(map(int, index))
+            return self.weight[index[0], index[1]]
+        
+        for i, (vq_indices_, input_length) in enumerate(zip(vq_indices, input_lengths)):
+            # import pdb; pdb.set_trace()
+            avg_weights.append(list(map(get_prob_normalized_weight, vq_indices_[:input_length])) + [0 for _ in range(len(vq_indices_) - input_length)])
+            # for j in range(input_length):
+            #     avg_weights[i, j] = get_prob_normalized_weight(vq_indices_[j])
+            # avg_weights[i] /= avg_weights[i].sum()
+        avg_weights = torch.tensor(avg_weights, device=input_feature.device)
+        avg_weights /= avg_weights.sum(dim=-1, keepdim=True)
+
+        return avg_weights
 
 
 ################################################
@@ -1013,6 +1043,24 @@ class SelfAttentiveMaskingPooling(nn.Module):
         feature = torch.sum(input_feature * w, dim=1) 
 
         return feature
+    
+    def get_weight(self, input_feature:Tensor, input_lengths:Tensor, *args):
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
+
+        B, L, _ = input_feature.shape # (Batch size, Length, Dimension)
+
+        h = torch.tanh(self.sap_linear(input_feature)) # (Batch size, Length, Dimension)
+        w = torch.matmul(h, self.attention).squeeze(dim=2) # (Batch size, Length)
+
+        # If length = 2, mask = [[1, 1, 0, 0, 0, ...]]
+        mask = torch.arange(L).expand(B, L).to(w.device) < input_lengths[:,None] # result : (Batch size, Length)
+        w = w + (~mask) * (w.min() - 20)
+
+        w = F.softmax(w, dim=1).view(B, L) # 
+
+        return w
+
 
 
 class VQOneHotAttentivePooling(nn.Module):
