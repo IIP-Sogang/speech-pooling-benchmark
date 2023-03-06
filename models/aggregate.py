@@ -845,7 +845,6 @@ class AttentiveStatisticsPooling(nn.Module):
         # ===========
         # NOTE(JK) squeeze dim for our framework
         # ===========
-        import pdb;pdb.set_trace()
         assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
         input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
 
