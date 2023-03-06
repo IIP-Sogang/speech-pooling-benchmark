@@ -826,9 +826,8 @@ class AttentiveStatisticsPooling(nn.Module):
 
         self.eps = 1e-12
 
-        self.conv = nn.Conv1d(in_channels=channels, out_channels=channels, kernel_size=1) # FC
-        self.tanh = nn.Tanh()
-        self.attention = self.new_parameter(channels, 1) # v
+        self.sap_linear = nn.Linear(channels, channels)
+        self.attention = self.new_parameter(channels, 1)
 
     def new_parameter(self, *size):
         out = nn.Parameter(torch.FloatTensor(*size))
@@ -846,47 +845,26 @@ class AttentiveStatisticsPooling(nn.Module):
         # ===========
         # NOTE(JK) squeeze dim for our framework
         # ===========
-        # input_feature: [B, Layers, L, C], Layers = 1
-        input_feature.squeeze_(1) # [B, L, C]
-        input_feature = input_feature.permute(0,2,1)  # [B, C, L]
+        import pdb;pdb.set_trace()
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
 
-        L = input_feature.shape[-1]
+        B, L, _ = input_feature.shape # (Batch size, Length, Dimension)
 
-        if input_lengths is None:
-            lengths = torch.ones(input_feature.shape[0], device=input_feature.device)
+        h = torch.tanh(self.sap_linear(input_feature)) # (Batch size, Length, Dimension)
+        w = torch.matmul(h, self.attention).squeeze(dim=2) # (Batch size, Length)
 
-        # Make binary mask of shape [N, 1, L]
-        mask = length_to_mask(input_lengths * L, max_len=L, device=input_feature.device) # [B, L]
-        mask = mask.unsqueeze(1) # [B, 1, L]
+        # If length = 2, mask = [[1, 1, 0, 0, 0, ...]]
+        mask = torch.arange(L).expand(B, L).to(w.device) < input_lengths[:,None] # result : (Batch size, Length)
+        w = w + (~mask) * (w.min() - 20)
 
-        # Expand the temporal context of the pooling layer by allowing the
-        # self-attention to look at global properties of the utterance.
+        w = F.softmax(w, dim=1).view(B, L, 1) # 
 
-        attn = input_feature # [B, C, L]
-
-        # Apply layers
-        # attn = self.conv(self.tanh(self.tdnn(attn)))
-
-        # ===========
-        # NOTE(JK) match dim for ours.
-        # ===========
-        attn = self.tanh(self.conv(attn)) # [B, C, L]
-
-        attn = attn.permute(0,2,1) # [B, L, C]
-        attn = torch.matmul(attn, self.attention) # [B, L, 1]
-        attn = attn.permute(0,2,1) # [B, 1, L] # for masked_fill
-
-        # Filter out zero-paddings
-        attn = attn.masked_fill(mask == 0, float("-inf")) # [B, 1, L]
-
-        # compute weights
-        attn = F.softmax(attn, dim=2) # [B, 1, L]
-        
-        mean = torch.sum(input_feature * attn, dim=2) # [B, C]
-        std = torch.sqrt( ( torch.sum((input_feature**2) * attn, dim=2) - mean**2 ).clamp(min=1e-5) )
+        mu = torch.sum(input_feature * w, dim=1)
+        rh = torch.sqrt( ( torch.sum((input_feature**2) * w, dim=1) - mu**2 ).clamp(min=1e-5) )
 
         # Append mean and std of the batch
-        pooled_stats = torch.cat((mean, std), dim=1) # [B, 2C]
+        pooled_stats = torch.cat((mu, rh), dim=1) # [B, 2C]
 
         return pooled_stats
 
