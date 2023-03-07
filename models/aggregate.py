@@ -924,6 +924,7 @@ class VectorAttentivePooling(nn.Module):
         # NOTE(JK) squeeze dim for our framework
         # ===========
         # input_feature: [B, Layer, L, C]
+        import pdb;pdb.set_trace()
         input_feature.squeeze_(1)
         input_feature = input_feature.permute(0,2,1) # [B, C, L]
 
@@ -936,11 +937,9 @@ class VectorAttentivePooling(nn.Module):
             )
             return mean, std
 
-        if input_lengths is None:
-            lengths = torch.ones(input_feature.shape[0], device=input_feature.device)
 
         # Make binary mask of shape [N, 1, L]
-        mask = length_to_mask(input_lengths * L, max_len=L, device=input_feature.device) # [B, L]
+        mask = length_to_mask(input_lengths, max_len=L, device=input_feature.device) # [B, L]
         mask = mask.unsqueeze(1) # [B, 1, L]
 
         # Expand the temporal context of the pooling layer by allowing the
