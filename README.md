@@ -1,10 +1,13 @@
-# deeplearning_framework_pl
-
-
 ## Introduction
-
+This code repository is the official implementation of the "Unsupervised Speech Representation Pooling Using Vector Quantization"
+To reproduce the experiments in this paper, perform the following three steps:
+1. Download the dataset
+2. Perform feature extraction
+3. Train/Test
 
 ## Getting Started
+
+
 
 ### 0. feature extraction
 ```
