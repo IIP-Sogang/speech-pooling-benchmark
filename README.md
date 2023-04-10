@@ -8,8 +8,12 @@ To reproduce the experiments in this paper, perform the following three steps:
 ## Getting Started
 
 
+### 1. Download the dataset
 
-### 0. feature extraction
+
+
+
+### 2. feature extraction
 ```
 # Context representation - wav2vec2 base
 python pre_extract_feats.py iemocap /home/nas4/DB/IEMOCAP /home/nas4/DB/IEMOCAP/IEMOCAP None None _feat_1_12
