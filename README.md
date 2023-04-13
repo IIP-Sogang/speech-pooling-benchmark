@@ -36,14 +36,31 @@ python pre_extract_feats.py --data_name speechcommands --root data --new_root da
 - wav2vec2.0-base VQ
 ```
 # training
-python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset training --tag _wav2vec2_base_mean --ext_type VQWav2VeLargeExtractor --method vq
+python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset training --tag _wav2vec2_base_vq --ext_type VQWav2VeLargeExtractor --method vq
 #validation
-python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset validation --tag _wav2vec2_base_mean --ext_type VQWav2VeLargeExtractor --method vq
+python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset validation --tag _wav2vec2_base_vq --ext_type VQWav2VeLargeExtractor --method vq
 # testing
-python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset testing --tag _wav2vec2_base_mean --ext_type VQWav2VeLargeExtractor --method vq
+python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset testing --tag _wav2vec2_base_vq --ext_type VQWav2VeLargeExtractor --method vq
 
 ```
-
+- wav2vec2.0-large mean
+```
+# training
+python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset training --tag _wav2vec2_large_mean --ext_type Wav2VeLargeExtractor --method mean
+# validation
+python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset validation --tag _wav2vec2_base_mean --ext_type Wav2VeLargeExtractor --method mean
+# testing
+python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset testing --tag _wav2vec2_base_mean --ext_type Wav2VeLargeExtractor --method mean
+```
+- wav2vec2.0-large VQ
+```
+# training
+python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset training --tag _wav2vec2_large_vq --ext_type VQWav2VeLargeExtractor --method mean
+# validation
+python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset validation --tag _wav2vec2_base_vq --ext_type VQWav2VeLargeExtractor --method mean
+# testing
+python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset testing --tag _wav2vec2_base_vq --ext_type VQWav2VeLargeExtractor --method mean
+```
 
 ```
 python pre_extract_feats.py --root data --new_root data --url speech_commands_v0.02 --subset train --tag _wav2vec2_base_mean --ext_type wav2vec2 --method vq
