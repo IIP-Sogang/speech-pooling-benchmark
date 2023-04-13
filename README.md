@@ -1,5 +1,6 @@
 ## Introduction
-This code repository is the official implementation of the [Unsupervised Speech Representation Pooling Using Vector Quantization](https://arxiv.org/abs/2304.03940)
+This code repository is the official implementation of the [Unsupervised Speech Representation Pooling Using Vector Quantization](https://arxiv.org/abs/2304.03940
+
 We design a novel pooling method to squash acoustically similar representations via vector quantization.
 
 ![figure1](figure/figure1.png)
@@ -8,7 +9,7 @@ The observed t-distributed Stochastic Neighbor Embedding (t-SNE) figure demonstr
 
 ![figure2](figure/figure2.png)
 
-Additionally,wevisualizeasample speech and its pooling weights induced by our VQ-LP method.
+Additionally, we visualize a sample speech and its pooling weights induced by our VQ-LP method.
 
 ![figure3](figure/figure3.png)
 
