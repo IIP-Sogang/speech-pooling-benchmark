@@ -1,5 +1,9 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{hyperref} % Add this line
+
 ## Introduction
-This code repository is the official implementation of the "Unsupervised Speech Representation Pooling Using Vector Quantization"
+This code repository is the official implementation of the \href{https://arxiv.org/abs/2304.03940}{"Unsupervised Speech Representation Pooling Using Vector Quantization"}
 To reproduce the experiments in this paper, perform the following three steps:
 1. Download the dataset
 2. Perform feature extraction
