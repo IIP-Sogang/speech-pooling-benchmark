@@ -16,12 +16,38 @@ We do not provide a guide for downloading the datasets here, but only provide th
 
 
 ### 2. feature extraction
-Our naming convention is as follows. The term "mean" refers to the average of the representations from each transformer block. And "VQ" means the quantized representations, denoted as $\mathbf{Q}$, using vector quantizer module.
+Our naming convention is as follows. The term "mean" refers to the average of the representations from each transformer block. And "VQ" means the quantized representations, denoted as "**Q**", using vector quantizer module.
 
 | | wav2vec2.0-base | wav2vec2.0-large | XLS-R |
 |---------|---------|----------|----------|
 |mean| _mean | _mean | _mean | 
 |VQ | _VQ | _VQ | _VQ |
+
+#### KWS
+- wav2vec2.0-base mean
+```
+# training
+python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset training --tag _wav2vec2_base_mean --ext_type wav2vec2 --method mean
+# validation
+python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset validation --tag _wav2vec2_base_mean --ext_type wav2vec2 --method mean
+# testing
+python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset testing --tag _wav2vec2_base_mean --ext_type wav2vec2 --method mean
+```
+- wav2vec2.0-base VQ
+```
+# training
+python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset training --tag _wav2vec2_base_mean --ext_type VQWav2VeLargeExtractor --method vq
+#validation
+python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset validation --tag _wav2vec2_base_mean --ext_type VQWav2VeLargeExtractor --method vq
+# testing
+python pre_extract_feats.py --data_name speechcommands --root data --new_root data --url speech_commands_v0.02 --subset testing --tag _wav2vec2_base_mean --ext_type VQWav2VeLargeExtractor --method vq
+
+```
+
+
+```
+python pre_extract_feats.py --root data --new_root data --url speech_commands_v0.02 --subset train --tag _wav2vec2_base_mean --ext_type wav2vec2 --method vq
+```
 
 
 ```
