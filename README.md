@@ -16,9 +16,9 @@ We do not provide a guide for downloading the datasets here, but only provide th
 
 
 ### 2. feature extraction
-Our naming convention is as follows. The term "mean" refers to the average of the representations from each transformer block.
+Our naming convention is as follows. The term "mean" refers to the average of the representations from each transformer block. And "VQ" means the quantized representations, denoted as $\mathbf{Q}$, using vector quantizer module.
 
-| | wav2vec2.0-base | wav2vec2.0-large | xlsr |
+| | wav2vec2.0-base | wav2vec2.0-large | XLS-R |
 |---------|---------|----------|----------|
 |mean| _mean | _mean | _mean | 
 |VQ | _VQ | _VQ | _VQ |
