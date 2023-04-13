@@ -227,14 +227,14 @@ python pre_extract_feats.py --data_name iemocap --root data --new_root data/IEMO
 python pre_extract_feats.py --data_name iemocap --root data --new_root data/IEMOCAP --tag _xlsr_vq --ext_type VQWav2VecXLSR03BExtractor --method vq
 ```
 
-### 1. train
+### Unsupervised Benchmark
+- wav2vec2.0 - base
 ```
-# EMOTION RECOGNITION
-CUDA_VISIBLE_DEVICES=0 python main.py --config ./configs/er_avg.yaml --mode train
+CUDA_VISIBLE_DEVICES=0 python run_unsupervised.py --dir results/unsupervised --upstream wav2vec2_base --tail mean --vq_tail vq --mode both
 ```
 
 
-### 2. test
+### Supervised Benchmark
 ```
 CUDA_VISIBLE_DEVICES=0 python main.py --config ./configs/esc_50.yaml --mode test
 ```
