@@ -1,36 +1,36 @@
-\documentclass{article}
-\usepackage[utf8]{inputenc}
-\usepackage{hyperref} % Add this line
-
 ## Introduction
-This code repository is the official implementation of the \href{https://arxiv.org/abs/2304.03940}{"Unsupervised Speech Representation Pooling Using Vector Quantization"}
+This code repository is the official implementation of the [Unsupervised Speech Representation Pooling Using Vector Quantization](https://arxiv.org/abs/2304.03940)
 To reproduce the experiments in this paper, perform the following three steps:
 1. Download the dataset
 2. Perform feature extraction
 3. Train/Test
 
-## Getting Started
 
 
 ### 1. Download the dataset
-
-
+We do not provide a guide for downloading the datasets here, but only provide the links. It is recommended to download the following four datasets into the `data` directory.
+- [Google SpeechCommands dataset V2](https://www.tensorflow.org/datasets/catalog/speech_commands?hl=en)
+- [VoxCeleb1](https://www.robots.ox.ac.uk/~vgg/data/voxceleb/)
+- [fluent speech cojmmand dataset](https://fluent.ai/fluent-speech-commands-a-dataset-for-spoken-language-understanding-research/)
+- [IEMOCAP](https://sail.usc.edu/iemocap/)
 
 
 ### 2. feature extraction
+Our naming convention is as follows. The term "mean" refers to the average of the representations from each transformer block.
+
+| | wav2vec2.0-base | wav2vec2.0-large | xlsr |
+|---------|---------|----------|----------|
+|mean| _mean | _mean | _mean | 
+|VQ | _VQ | _VQ | _VQ |
+
+
 ```
 # Context representation - wav2vec2 base
 python pre_extract_feats.py iemocap /home/nas4/DB/IEMOCAP /home/nas4/DB/IEMOCAP/IEMOCAP None None _feat_1_12
 
 # Context representation - wav2vec2 xlsr
-CUDA_VISIBLE_DEVICES=0 python pre_extract_feats.py iemocap /home/nas4/DB/IEMOCAP /home/nas4/DB/IEMOCAP/IEMOCAP None None _xlsr_feat_1_12 1_12 Wav2VecXLSR03BExtractor
-CUDA_VISIBLE_DEVICES=1 python pre_extract_feats.py iemocap /home/nas4/DB/IEMOCAP /home/nas4/DB/IEMOCAP/IEMOCAP None None _feat_1_12 1_12 Wav2VecExtor
+CUDA_VISIBLE_DEVICES=0 python pre_extract_feats.py iemocap /home/nas4/DB/IEMOCAP /home/nas4/DB/IEMOCAP/IEMOCAP None None xlsr_feat_1_12
 
-# Context representation - wav2vec2 xlsr
-# ic
-CUDA_VISIBLE_DEVICES=0 python pre_extract_feats.py fluent /home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset /home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset None train _xlsr_feat_1_12 Wav2VecXLSR03BExtractor
-CUDA_VISIBLE_DEVICES=0 python pre_extract_feats.py fluent /home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset /home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset None valid _xlsr_feat_1_12 Wav2VecXLSR03BExtractor
-CUDA_VISIBLE_DEVICES=0 python pre_extract_feats.py fluent /home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset /home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset None test _xlsr_feat_1_12 Wav2VecXLSR03BExtractor
 
 # IC - train
 python pre_extract_feats.py fluentspeechcommand /home/nas4/DB/fluent_speech_commands /home/nas4/DB/fluent_speech_commands/fluent_speech_commands_dataset None train _feat_1_12
