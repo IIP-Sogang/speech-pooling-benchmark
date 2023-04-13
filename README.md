@@ -1,5 +1,5 @@
 ## Introduction
-This code repository is the official implementation of the [Unsupervised Speech Representation Pooling Using Vector Quantization](https://arxiv.org/abs/2304.03940)
+This code repository is the official implementation of the [Unsupervised Speech Representation Pooling Using Vector Quantization](https://arxiv.org/abs/2304.03940).
 We design a novel pooling method to squash acoustically similar representations via vector quantization.
 
 ![figure1](figure/figure1.png)
