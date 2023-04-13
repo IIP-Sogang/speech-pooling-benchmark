@@ -42,7 +42,7 @@ def train(config):
 
     test_dataloader = DataLoader(
             dataset = test_dataset,
-            batch_size=config['batch_size'],
+            batch_size=1,
             num_workers=config['num_workers'],
             pin_memory=False,
             collate_fn=test_collate_fn,
@@ -122,7 +122,7 @@ def test(config):
 
     test_dataloader = DataLoader(
             dataset = test_dataset,
-            batch_size=config['batch_size'],
+            batch_size=1,
             num_workers=config['num_workers'],
             pin_memory=False,
             collate_fn=collate_fn,
