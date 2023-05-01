@@ -897,6 +897,53 @@ class AttentiveStatisticsPooling(nn.Module):
 
         return pooled_stats
 
+class AttentiveStatisticsPooling_noclamp(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+
+        self.eps = 1e-12
+
+        self.sap_linear = nn.Linear(channels, channels)
+        self.attention = self.new_parameter(channels, 1)
+
+    def new_parameter(self, *size):
+        out = nn.Parameter(torch.FloatTensor(*size))
+        nn.init.xavier_normal_(out)
+        return out
+
+
+    def forward(self, input_feature:Tensor, input_lengths:Tensor, *args):
+        """Calculates mean and std for a batch (input tensor).
+        Arguments
+        ---------
+        x : torch.Tensor
+            Tensor of shape [N, C, L].
+        """
+        # ===========
+        # NOTE(JK) squeeze dim for our framework
+        # ===========
+        assert input_feature.dim() == 4, f"Input feature size is {input_feature.size()}, Should follows (Batch, Layer, Length, Dimension)"
+        input_feature = input_feature[:,-1] if input_feature.dim() == 4 else input_feature
+
+        B, L, _ = input_feature.shape # (Batch size, Length, Dimension)
+
+        h = torch.tanh(self.sap_linear(input_feature)) # (Batch size, Length, Dimension)
+        w = torch.matmul(h, self.attention).squeeze(dim=2) # (Batch size, Length)
+
+        # If length = 2, mask = [[1, 1, 0, 0, 0, ...]]
+        mask = torch.arange(L).expand(B, L).to(w.device) < input_lengths[:,None] # result : (Batch size, Length)
+        w = w + (~mask) * (w.min() - 20)
+
+        w = F.softmax(w, dim=1).view(B, L, 1) # 
+
+        mu = torch.sum(input_feature * w, dim=1)
+        rh = torch.sqrt( ( torch.sum((input_feature**2) * w, dim=1) - mu**2 ))
+
+        # Append mean and std of the batch
+        pooled_stats = torch.cat((mu, rh), dim=1) # [B, 2C]
+
+        return pooled_stats
+
 
 class VectorAttentivePooling(nn.Module):
     def __init__(self, channels, attention_channels=768, global_context=False):
@@ -1137,6 +1184,8 @@ def select_method(head_type:str='avgpool', input_dim:int=768, layer_ids:Union[st
         return SelfAttentiveMaskingPooling(input_dim)
     elif head_type=='asp':
         return AttentiveStatisticsPooling(channels=input_dim)
+    elif head_type=='asp_noclamp':
+        return AttentiveStatisticsPooling_noclamp(channels=input_dim)
     elif head_type=='v_asp':
         return VectorAttentivePooling(channels=input_dim, attention_channels=kwargs['attention_channels'], global_context=kwargs['global_context'])
     elif head_type=='white':
